@@ -5,7 +5,6 @@
  */
 
 import { dbService } from './db.js';
-import { getStoredSupabaseConfig, saveStoredSupabaseConfig, clearStoredSupabaseConfig } from './config.js';
 
 // DOM Elements
 const btnNavbarUpload = document.getElementById('btn-navbar-upload');
@@ -27,9 +26,6 @@ const searchInput = document.getElementById('search-input');
 const searchClear = document.getElementById('search-clear');
 const btnRefresh = document.getElementById('btn-refresh');
 
-const statusBadge = document.getElementById('status-badge');
-const statusText = document.getElementById('status-text');
-
 // Sorting
 const colSortName = document.getElementById('col-sort-name');
 const colSortDate = document.getElementById('col-sort-date');
@@ -46,10 +42,6 @@ const shareUrlInput = document.getElementById('share-url-input');
 const btnCopyShareUrl = document.getElementById('btn-copy-share-url');
 const btnModalDownload = document.getElementById('btn-modal-download');
 
-const settingsDialog = document.getElementById('settings-dialog');
-const btnOpenSettings = document.getElementById('btn-open-settings');
-const supabaseConfigForm = document.getElementById('supabase-config-form');
-const btnResetConfig = document.getElementById('btn-reset-config');
 const toastContainer = document.getElementById('toast-container');
 const liveAnnouncer = document.getElementById('live-announcer');
 
@@ -68,26 +60,13 @@ async function initApp() {
   setupEventListeners();
 
   try {
-    const { mode } = await dbService.init();
-    updateStatusBadge(mode);
+    await dbService.init();
     await refreshFilesList();
     checkUrlQueryParams();
     startCountdownTicker();
   } catch (err) {
     console.error('Initialization error:', err);
     showToast('Failed to initialize database.', 'error');
-  }
-}
-
-function updateStatusBadge(mode) {
-  if (mode === 'supabase') {
-    statusBadge.className = 'nav-status-pill status-supabase';
-    statusText.textContent = 'Supabase';
-    statusBadge.title = 'Connected to live Supabase Storage & PostgreSQL';
-  } else {
-    statusBadge.className = 'nav-status-pill status-local';
-    statusText.textContent = 'Local Vault';
-    statusBadge.title = 'Running in browser IndexedDB. Click settings to connect Supabase.';
   }
 }
 
@@ -170,8 +149,7 @@ function setupEventListeners() {
     uploadWidget.hidden = true;
   });
 
-  // Settings & Modals
-  btnOpenSettings.addEventListener('click', () => openSettingsModal());
+  // Modals
   document.querySelectorAll('.btn-dialog-close').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const dialog = e.target.closest('dialog');
@@ -181,26 +159,6 @@ function setupEventListeners() {
 
   btnCopyShareUrl.addEventListener('click', () => {
     copyTextToClipboard(shareUrlInput.value, 'Direct link copied to clipboard!');
-  });
-
-  // Supabase Config Form
-  supabaseConfigForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const config = {
-      supabaseUrl: document.getElementById('cfg-supabaseUrl').value.trim(),
-      supabaseAnonKey: document.getElementById('cfg-supabaseAnonKey').value.trim()
-    };
-    saveStoredSupabaseConfig(config);
-    settingsDialog.close();
-    showToast('Supabase configuration saved. Reloading...');
-    setTimeout(() => window.location.reload(), 800);
-  });
-
-  btnResetConfig.addEventListener('click', () => {
-    clearStoredSupabaseConfig();
-    settingsDialog.close();
-    showToast('Reset to Local Vault mode. Reloading...');
-    setTimeout(() => window.location.reload(), 800);
   });
 }
 
@@ -465,13 +423,6 @@ function openShareDialog(file) {
   };
 
   shareDialog.showModal();
-}
-
-function openSettingsModal() {
-  const config = getStoredSupabaseConfig();
-  document.getElementById('cfg-supabaseUrl').value = config.supabaseUrl || '';
-  document.getElementById('cfg-supabaseAnonKey').value = config.supabaseAnonKey || '';
-  settingsDialog.showModal();
 }
 
 async function checkUrlQueryParams() {
