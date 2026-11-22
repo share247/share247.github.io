@@ -44,6 +44,10 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html, body {
   width: 100%;
   height: 100%;
@@ -584,10 +588,14 @@ button {
   background-color: rgba(18, 19, 22, 0.88);
   backdrop-filter: blur(4px);
   z-index: 100;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+}
+
+.drag-overlay.active {
+  display: flex !important;
 }
 
 .drag-box {

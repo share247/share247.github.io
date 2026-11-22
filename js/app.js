@@ -96,10 +96,15 @@ function updateStatusBadge(mode) {
 // ==========================================
 
 function setupEventListeners() {
-  // Navbar Upload Trigger
+  // Navbar & Empty State Upload Trigger
   btnNavbarUpload.addEventListener('click', () => {
     fileInput.click();
   });
+
+  const btnEmptyUpload = document.getElementById('btn-empty-upload');
+  if (btnEmptyUpload) {
+    btnEmptyUpload.addEventListener('click', () => fileInput.click());
+  }
 
   fileInput.addEventListener('change', () => {
     if (fileInput.files && fileInput.files.length > 0) {
@@ -113,6 +118,7 @@ function setupEventListeners() {
     e.preventDefault();
     dragCounter++;
     if (dragCounter === 1) {
+      dragOverlay.classList.add('active');
       dragOverlay.hidden = false;
     }
   });
@@ -122,6 +128,7 @@ function setupEventListeners() {
     dragCounter--;
     if (dragCounter <= 0) {
       dragCounter = 0;
+      dragOverlay.classList.remove('active');
       dragOverlay.hidden = true;
     }
   });
@@ -131,6 +138,7 @@ function setupEventListeners() {
   window.addEventListener('drop', (e) => {
     e.preventDefault();
     dragCounter = 0;
+    dragOverlay.classList.remove('active');
     dragOverlay.hidden = true;
     if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFiles(Array.from(e.dataTransfer.files));
