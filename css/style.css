@@ -1223,14 +1223,22 @@ dialog::backdrop {
 }
 
 .access-option-label {
+  position: relative;
   cursor: pointer;
   display: block;
 }
 
 .access-option-label input[type="radio"] {
   position: absolute;
-  opacity: 0;
-  pointer-events: none;
+  top: 0;
+  left: 0;
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
 }
 
 .access-option-box {

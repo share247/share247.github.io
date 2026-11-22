@@ -239,6 +239,9 @@ function setupEventListeners() {
 
   // Dialog backdrop click-to-close & close buttons
   document.querySelectorAll('dialog').forEach(dialog => {
+    dialog.addEventListener('close', () => {
+      dialog.scrollLeft = 0;
+    });
     dialog.addEventListener('click', (e) => {
       const rect = dialog.getBoundingClientRect();
       const isInDialog = (
@@ -484,6 +487,7 @@ function promptUploadOptions(initialFile) {
     uploadForm.addEventListener('submit', handleSubmit);
     uploadDialog.addEventListener('close', handleCancel, { once: true });
 
+    uploadDialog.scrollLeft = 0;
     uploadDialog.showModal();
   });
 }
