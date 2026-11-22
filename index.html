@@ -76,7 +76,7 @@
         <caption id="vault-table-caption" class="sr-only">Public shared files list</caption>
         <thead>
           <tr>
-            <th class="th-name" scope="col" id="col-sort-name" role="button" tabindex="0">
+            <th class="th-name" scope="col" id="col-sort-name" role="button" tabindex="0" aria-sort="none">
               <span class="th-content">
                 Name
                 <svg id="name-sort-arrow" class="sort-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
@@ -86,22 +86,34 @@
               </span>
             </th>
             <th class="th-owner" scope="col">Owner</th>
-            <th class="th-date" scope="col" id="col-sort-date" role="button" tabindex="0">
-              <span class="th-content">Date modified</span>
+            <th class="th-date" scope="col" id="col-sort-date" role="button" tabindex="0" aria-sort="descending">
+              <span class="th-content">
+                Date modified
+                <svg id="date-sort-arrow" class="sort-arrow desc" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <line x1="12" y1="19" x2="12" y2="5"></line>
+                  <polyline points="5 12 12 5 19 12"></polyline>
+                </svg>
+              </span>
             </th>
             <th class="th-expires" scope="col">Expires in</th>
-            <th class="th-size" scope="col" id="col-sort-size" role="button" tabindex="0">
-              <span class="th-content">File size</span>
+            <th class="th-size" scope="col" id="col-sort-size" role="button" tabindex="0" aria-sort="none">
+              <span class="th-content">
+                File size
+                <svg id="size-sort-arrow" class="sort-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <line x1="12" y1="19" x2="12" y2="5"></line>
+                  <polyline points="5 12 12 5 19 12"></polyline>
+                </svg>
+              </span>
             </th>
             <th class="th-actions" scope="col">
-              <div class="th-sort-menu-btn" title="Sort options">
+              <button type="button" id="th-sort-menu-btn" class="th-sort-menu-btn" title="Cycle sort column (Date / Name / Size)" aria-label="Cycle sort column">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <line x1="3" y1="6" x2="21" y2="6"></line>
                   <line x1="6" y1="12" x2="18" y2="12"></line>
                   <line x1="9" y1="18" x2="15" y2="18"></line>
                 </svg>
                 <span>Sort</span>
-              </div>
+              </button>
             </th>
           </tr>
         </thead>
@@ -350,7 +362,15 @@
       <form id="pin-unlock-form">
         <div class="dialog-field">
           <label for="unlock-pin-code">Enter PIN Code</label>
-          <input type="password" id="unlock-pin-code" class="pin-input-field" placeholder="Enter PIN (e.g. 1234)" required autocomplete="off" autofocus>
+          <div class="pin-input-wrap">
+            <input type="password" id="unlock-pin-code" class="pin-input-field" placeholder="Enter PIN (e.g. 1234)" required autocomplete="off" autofocus inputmode="numeric">
+            <button type="button" id="btn-toggle-pin-visibility" class="btn-toggle-pin" aria-label="Show or hide PIN">
+              <svg id="pin-eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="3" r="3"></circle>
+              </svg>
+            </button>
+          </div>
           <p id="pin-error-feedback" class="pin-error-msg" hidden>⚠️ Incorrect PIN. Please try again.</p>
         </div>
 

@@ -31,6 +31,9 @@ const colSortName = document.getElementById('col-sort-name');
 const colSortDate = document.getElementById('col-sort-date');
 const colSortSize = document.getElementById('col-sort-size');
 const nameSortArrow = document.getElementById('name-sort-arrow');
+const dateSortArrow = document.getElementById('date-sort-arrow');
+const sizeSortArrow = document.getElementById('size-sort-arrow');
+const thSortMenuBtn = document.getElementById('th-sort-menu-btn');
 
 // Modals
 const shareDialog = document.getElementById('share-dialog');
@@ -41,6 +44,8 @@ const shareModalExpires = document.getElementById('share-modal-expires');
 const shareUrlInput = document.getElementById('share-url-input');
 const btnCopyShareUrl = document.getElementById('btn-copy-share-url');
 const btnModalDownload = document.getElementById('btn-modal-download');
+const btnTogglePinVisibility = document.getElementById('btn-toggle-pin-visibility');
+const unlockPinCode = document.getElementById('unlock-pin-code');
 
 const toastContainer = document.getElementById('toast-container');
 const liveAnnouncer = document.getElementById('live-announcer');
@@ -68,14 +73,30 @@ async function initApp() {
     checkUrlQueryParams();
     startCountdownTicker();
 
-    // Realtime: Listen for new files added from other devices!
-    dbService.subscribeToFiles((newFile) => {
-      const existingIdx = activeFiles.findIndex(f => f.id === newFile.id);
-      if (existingIdx === -1) {
-        activeFiles.unshift(newFile);
+    updateSortUI();
+
+    // Realtime: Listen for file changes (INSERT, DELETE, UPDATE) from other devices!
+    dbService.subscribeToFiles((eventType, record) => {
+      if (eventType === 'INSERT') {
+        const existingIdx = activeFiles.findIndex(f => f.id === record.id);
+        if (existingIdx === -1) {
+          activeFiles.unshift(record);
+          renderFilesTable();
+          updateFooterStorageTracker();
+          showToast(`New file shared: "${record.name}"`, 'info');
+          announcePolitely(`New file shared: ${record.name}`);
+        }
+      } else if (eventType === 'DELETE') {
+        activeFiles = activeFiles.filter(f => f.id !== record.id);
         renderFilesTable();
-        showToast(`New file shared: "${newFile.name}"`, 'info');
-        announcePolitely(`New file shared: ${newFile.name}`);
+        updateFooterStorageTracker();
+      } else if (eventType === 'UPDATE') {
+        const idx = activeFiles.findIndex(f => f.id === record.id);
+        if (idx !== -1) {
+          activeFiles[idx] = record;
+          renderFilesTable();
+          updateFooterStorageTracker();
+        }
       }
     });
 
@@ -138,6 +159,8 @@ function setupEventListeners() {
   // Full-window Drag and Drop (Reliable counter with file type verification)
   window.addEventListener('dragenter', (e) => {
     e.preventDefault();
+    const uploadDialog = document.getElementById('upload-dialog');
+    if (uploadDialog && uploadDialog.open) return;
     if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
       dragCounter++;
       if (dragCounter === 1) {
@@ -194,18 +217,62 @@ function setupEventListeners() {
   colSortDate.addEventListener('click', () => toggleSort('date'));
   colSortSize.addEventListener('click', () => toggleSort('size'));
 
+  [colSortName, colSortDate, colSortSize].forEach(th => {
+    if (th) {
+      th.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          th.click();
+        }
+      });
+    }
+  });
+
+  if (thSortMenuBtn) {
+    thSortMenuBtn.addEventListener('click', () => cycleSort());
+  }
+
   // Upload widget close
   btnCloseUploadWidget.addEventListener('click', () => {
     uploadWidget.hidden = true;
   });
 
-  // Modals
+  // Dialog backdrop click-to-close & close buttons
+  document.querySelectorAll('dialog').forEach(dialog => {
+    dialog.addEventListener('click', (e) => {
+      const rect = dialog.getBoundingClientRect();
+      const isInDialog = (
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom
+      );
+      if (!isInDialog) {
+        dialog.close();
+      }
+    });
+  });
+
   document.querySelectorAll('.btn-dialog-close').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const dialog = e.target.closest('dialog');
       if (dialog) dialog.close();
     });
   });
+
+  // PIN visibility toggle
+  if (btnTogglePinVisibility && unlockPinCode) {
+    btnTogglePinVisibility.addEventListener('click', () => {
+      const isPassword = unlockPinCode.type === 'password';
+      unlockPinCode.type = isPassword ? 'text' : 'password';
+      const eyeIcon = document.getElementById('pin-eye-icon');
+      if (eyeIcon) {
+        eyeIcon.innerHTML = isPassword
+          ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>`
+          : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
+      }
+    });
+  }
 
   btnCopyShareUrl.addEventListener('click', () => {
     copyTextToClipboard(shareUrlInput.value, 'Direct link copied to clipboard!');
@@ -219,19 +286,52 @@ function setupEventListeners() {
   });
 }
 
+function updateSortUI() {
+  const arrows = {
+    name: document.getElementById('name-sort-arrow'),
+    date: document.getElementById('date-sort-arrow'),
+    size: document.getElementById('size-sort-arrow')
+  };
+  const headers = {
+    name: colSortName,
+    date: colSortDate,
+    size: colSortSize
+  };
+
+  ['name', 'date', 'size'].forEach(col => {
+    const arrow = arrows[col];
+    const header = headers[col];
+    if (arrow) {
+      if (sortColumn === col) {
+        arrow.classList.add('active');
+        arrow.classList.toggle('desc', !sortAsc);
+      } else {
+        arrow.classList.remove('active', 'desc');
+      }
+    }
+    if (header) {
+      header.setAttribute('aria-sort', sortColumn === col ? (sortAsc ? 'ascending' : 'descending') : 'none');
+    }
+  });
+}
+
+function cycleSort() {
+  const columns = ['date', 'name', 'size'];
+  const nextIdx = (columns.indexOf(sortColumn) + 1) % columns.length;
+  sortColumn = columns[nextIdx];
+  sortAsc = sortColumn === 'name';
+  updateSortUI();
+  renderFilesTable();
+}
+
 function toggleSort(column) {
   if (sortColumn === column) {
     sortAsc = !sortAsc;
   } else {
     sortColumn = column;
-    sortAsc = true;
+    sortAsc = column === 'name';
   }
-
-  // Update arrow rotation on name column
-  if (sortColumn === 'name') {
-    nameSortArrow.classList.toggle('desc', !sortAsc);
-  }
-
+  updateSortUI();
   renderFilesTable();
 }
 
@@ -537,6 +637,18 @@ function renderFilesTable() {
 
   if (filtered.length === 0) {
     emptyState.hidden = false;
+    const emptyTitle = emptyState.querySelector('h2');
+    const emptyDesc = emptyState.querySelector('p');
+    const btnEmptyUpload = document.getElementById('btn-empty-upload');
+    if (query) {
+      if (emptyTitle) emptyTitle.textContent = `No files matching "${query}"`;
+      if (emptyDesc) emptyDesc.innerHTML = 'Try adjusting your search query or clear the filter.';
+      if (btnEmptyUpload) btnEmptyUpload.hidden = true;
+    } else {
+      if (emptyTitle) emptyTitle.textContent = 'No files in the vault';
+      if (emptyDesc) emptyDesc.innerHTML = 'Click <strong>+ Upload</strong> in the navbar or drop files anywhere onto this window.';
+      if (btnEmptyUpload) btnEmptyUpload.hidden = false;
+    }
     updateFooterStorageTracker();
     return;
   }
@@ -736,6 +848,11 @@ function openPinModal(file, onUnlocked) {
   pinModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • 🔒 PIN Protected`;
 
   pinInput.value = '';
+  pinInput.type = 'password';
+  const eyeIcon = document.getElementById('pin-eye-icon');
+  if (eyeIcon) {
+    eyeIcon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="3" r="3"></circle>`;
+  }
   errorFeedback.hidden = true;
 
   const handleSubmit = (e) => {
@@ -767,19 +884,37 @@ function openPinModal(file, onUnlocked) {
 
 async function triggerDownload(file) {
   try {
+    showToast(`Preparing download for "${file.name}"...`);
     await dbService.incrementDownload(file.id);
     file.downloadsCount = (file.downloadsCount || 0) + 1;
 
-    const a = document.createElement('a');
-    a.href = file.downloadUrl;
-    a.download = file.name;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      // Fetch as blob to guarantee cross-origin download attribute is honored by browser
+      const response = await fetch(file.downloadUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error('Blob fetch failed');
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
 
-    showToast(`Downloading "${file.name}"...`);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+      showToast(`Downloading "${file.name}"...`, 'success');
+    } catch (blobErr) {
+      // Fallback for direct link navigation
+      const a = document.createElement('a');
+      a.href = file.downloadUrl;
+      a.download = file.name;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast(`Downloading "${file.name}"...`);
+    }
   } catch (err) {
     console.error('Download error:', err);
     showToast('Failed to trigger download.', 'error');

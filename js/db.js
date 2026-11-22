@@ -333,14 +333,27 @@ class DatabaseService {
     });
   }
 
-  async uploadFileToLocal(file, onProgress) {
+  async uploadFileToLocal(file, onProgress, pin = null) {
     const fileId = crypto.randomUUID ? crypto.randomUUID() : 'f_' + Date.now().toString(36);
     const now = Date.now();
     const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
 
-    for (let p = 20; p <= 100; p += 25) {
-      if (onProgress) onProgress(p);
-      await new Promise(r => setTimeout(r, 40));
+    for (let p = 20; p <= 100; p += 20) {
+      if (onProgress) {
+        const loadedBytes = Math.round((p / 100) * file.size);
+        onProgress({
+          percent: p,
+          loaded: loadedBytes,
+          total: file.size,
+          speed: 1048576,
+          eta: p < 100 ? 1 : 0,
+          formattedLoaded: this.formatBytes(loadedBytes),
+          formattedTotal: this.formatBytes(file.size),
+          formattedSpeed: '1.0 MB/s',
+          formattedEta: p < 100 ? '1s left' : 'Done'
+        });
+      }
+      await new Promise(r => setTimeout(r, 35));
     }
 
     const record = {
@@ -483,15 +496,19 @@ class DatabaseService {
     return this.deleteFileFromLocal(fileId);
   }
 
-  subscribeToFiles(onFileAdded) {
+  subscribeToFiles(onFileChange) {
     if (this.mode !== 'supabase' || !this.supabase) return null;
     try {
       const channel = this.supabase
         .channel('realtime:files')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'files' }, (payload) => {
-          if (payload && payload.new) {
-            const mapped = this.mapSupabaseRecord(payload.new);
-            if (onFileAdded) onFileAdded(mapped);
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'files' }, (payload) => {
+          if (!onFileChange || !payload) return;
+          if (payload.eventType === 'INSERT' && payload.new) {
+            onFileChange('INSERT', this.mapSupabaseRecord(payload.new));
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            onFileChange('DELETE', { id: payload.old.id });
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            onFileChange('UPDATE', this.mapSupabaseRecord(payload.new));
           }
         })
         .subscribe();

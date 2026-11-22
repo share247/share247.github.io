@@ -180,6 +180,15 @@ button {
   font-family: inherit;
 }
 
+/* Hide native WebKit search cancel button to prevent duplicate X icons */
+.search-box input[type="search"]::-webkit-search-decoration,
+.search-box input[type="search"]::-webkit-search-cancel-button,
+.search-box input[type="search"]::-webkit-search-results-button,
+.search-box input[type="search"]::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+
 .search-box input::placeholder {
   color: var(--text-muted);
 }
@@ -368,8 +377,20 @@ button {
 }
 
 .sort-arrow {
-  color: var(--text-primary);
-  transition: transform 0.2s ease;
+  color: var(--accent-cyan);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.sort-arrow.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.th-content:hover .sort-arrow {
+  opacity: 0.6;
+  visibility: visible;
 }
 
 .sort-arrow.desc {
@@ -384,13 +405,17 @@ button {
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.15s ease;
 }
 
 .th-sort-menu-btn:hover {
-  background-color: var(--bg-surface-hover);
+  background-color: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 /* Column Width Allocations */
@@ -1049,6 +1074,31 @@ dialog::backdrop {
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
 }
 
+.pin-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.btn-toggle-pin {
+  position: absolute;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-toggle-pin:hover {
+  color: #f8fafc;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
 /* PIN Input Field with Centered Digit Styling */
 .pin-input-field {
   text-align: center;
@@ -1058,6 +1108,7 @@ dialog::backdrop {
   font-family: var(--font-mono) !important;
   background-color: #0f1218 !important;
   border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+  padding-right: 44px !important;
 }
 
 .pin-input-field:focus {
@@ -1310,14 +1361,29 @@ dialog::backdrop {
   .th-expires, .cell-expires {
     display: none;
   }
-  .th-name {
-    width: 60%;
+  .th-name, .cell-name {
+    width: 48%;
   }
-  .th-date {
-    width: 25%;
+  .th-date, .cell-date {
+    width: 24%;
   }
-  .th-size {
-    width: 15%;
+  .th-size, .cell-size {
+    width: 14%;
+  }
+  .th-actions, .cell-actions {
+    width: 14%;
+    min-width: 80px;
+    text-align: right;
+  }
+  /* On mobile/touch devices, ensure row actions are always accessible */
+  .row-hover-actions {
+    opacity: 1 !important;
+  }
+}
+
+@media (hover: none) {
+  .row-hover-actions {
+    opacity: 1 !important;
   }
 }
 
