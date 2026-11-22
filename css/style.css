@@ -813,12 +813,22 @@ dialog {
   max-height: 88vh;
   max-height: 88dvh;
   overflow-y: auto;
+  overflow-x: hidden !important;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   animation: modal-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 dialog::-webkit-scrollbar {
   width: 5px;
+  height: 0px !important;
+}
+
+dialog::-webkit-scrollbar-horizontal {
+  display: none !important;
+  height: 0px !important;
+  width: 0px !important;
 }
 
 dialog::-webkit-scrollbar-track {
@@ -849,6 +859,8 @@ dialog::backdrop {
 
 .dialog-box {
   padding: 1.4rem 1.5rem;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 .dialog-header {
