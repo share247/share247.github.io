@@ -902,7 +902,7 @@ dialog::backdrop {
   color: #f8fafc;
 }
 
-.btn-dialog-close {
+.dialog-header .btn-dialog-close {
   width: 32px;
   height: 32px;
   border-radius: 8px;
@@ -914,9 +914,10 @@ dialog::backdrop {
   justify-content: center;
   transition: all 0.18s ease;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
-.btn-dialog-close:hover {
+.dialog-header .btn-dialog-close:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
   transform: rotate(90deg);
@@ -1359,19 +1360,27 @@ dialog::backdrop {
 }
 
 .btn-action-secondary {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
   color: #cbd5e1;
   font-size: 0.875rem;
   font-weight: 500;
-  padding: 0.6rem 1.1rem;
+  padding: 0.6rem 1.25rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.15s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
 }
 
 .btn-action-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 /* ==========================================================================

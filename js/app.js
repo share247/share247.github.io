@@ -253,7 +253,7 @@ function setupEventListeners() {
     });
   });
 
-  document.querySelectorAll('.btn-dialog-close').forEach(btn => {
+  document.querySelectorAll('.btn-dialog-close, .btn-dialog-cancel').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const dialog = e.target.closest('dialog');
       if (dialog) dialog.close();
