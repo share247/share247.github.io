@@ -957,3 +957,191 @@ dialog::backdrop {
     width: 15%;
   }
 }
+
+/* ==========================================================================
+   VAULT FOOTER (Database Storage Tracking & Creator)
+   ========================================================================== */
+.vault-footer {
+  height: 48px;
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  flex-shrink: 0;
+  z-index: 10;
+  user-select: none;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+}
+
+.storage-tracker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.storage-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background-color: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.storage-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.storage-text-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.775rem;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.storage-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.db-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background-color: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  transition: all 0.2s ease;
+}
+
+.db-badge.status-supabase {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.db-badge.status-local {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.storage-metric {
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.storage-percent {
+  font-family: var(--font-mono, monospace);
+  color: var(--text-tertiary);
+}
+
+.storage-dot-separator {
+  color: var(--border-subtle);
+  font-size: 0.9rem;
+}
+
+.storage-files {
+  color: var(--text-secondary);
+}
+
+.storage-bar-track {
+  width: 160px;
+  height: 5px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.storage-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+  transition: width 0.4s ease, background 0.3s ease;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+}
+
+.creator-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.creator-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.creator-link:hover {
+  background-color: rgba(14, 165, 233, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(56, 189, 248, 0.2);
+}
+
+.linkedin-svg {
+  color: #0ea5e9;
+  transition: color 0.2s ease;
+}
+
+.creator-link:hover .linkedin-svg {
+  color: #38bdf8;
+}
+
+.creator-arrow {
+  opacity: 0.6;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.creator-link:hover .creator-arrow {
+  opacity: 1;
+  transform: translate(1px, -1px);
+}
+
+@media (max-width: 680px) {
+  .vault-footer {
+    height: auto;
+    padding: 0.6rem 1rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .footer-right {
+    justify-content: flex-end;
+  }
+  .storage-bar-track {
+    width: 100%;
+  }
+}
+

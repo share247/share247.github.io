@@ -130,6 +130,51 @@
     </div>
   </main>
 
+  <!-- Live Database Storage & Creator Footer -->
+  <footer class="vault-footer">
+    <div class="footer-left">
+      <div class="storage-tracker" title="Live Database Storage Usage">
+        <div class="storage-icon-wrap" aria-hidden="true">
+          <svg class="storage-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+          </svg>
+        </div>
+        <div class="storage-details">
+          <div class="storage-text-row">
+            <span class="storage-title">Database Storage</span>
+            <span id="footer-db-badge" class="db-badge">Connecting...</span>
+            <span id="footer-storage-used" class="storage-metric">0 B / 1 GB</span>
+            <span id="footer-storage-percent" class="storage-percent">(0%)</span>
+            <span class="storage-dot-separator" aria-hidden="true">&bull;</span>
+            <span id="footer-files-count" class="storage-files">0 active files</span>
+          </div>
+          <div class="storage-bar-track" id="footer-storage-progressbar" role="progressbar" aria-label="Database storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="footer-storage-bar" class="storage-bar-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-right">
+      <div class="creator-badge">
+        <span class="creator-label">Created by</span>
+        <a href="https://www.linkedin.com/in/m0stafa-kamal" target="_blank" rel="noopener noreferrer" class="creator-link" title="Connect with M0stafa on LinkedIn">
+          <svg class="linkedin-svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+          </svg>
+          <span class="creator-name">M0stafa</span>
+          <svg class="creator-arrow" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </footer>
+
   <!-- Fullscreen Drag & Drop Overlay -->
   <div id="drag-overlay" class="drag-overlay" hidden>
     <div class="drag-box">

@@ -60,7 +60,8 @@ async function initApp() {
   setupEventListeners();
 
   try {
-    await dbService.init();
+    const { mode } = await dbService.init();
+    updateFooterDbMode(mode);
     await refreshFilesList();
     checkUrlQueryParams();
     startCountdownTicker();
@@ -277,6 +278,7 @@ function renderFilesTable() {
 
   if (filtered.length === 0) {
     emptyState.hidden = false;
+    updateFooterStorageTracker();
     return;
   }
 
@@ -348,6 +350,67 @@ function renderFilesTable() {
 
     filesTbody.appendChild(tr);
   });
+
+  updateFooterStorageTracker();
+}
+
+function updateFooterStorageTracker() {
+  const footerStorageUsed = document.getElementById('footer-storage-used');
+  const footerStoragePercent = document.getElementById('footer-storage-percent');
+  const footerFilesCount = document.getElementById('footer-files-count');
+  const footerStorageBar = document.getElementById('footer-storage-bar');
+  const footerStorageProgressbar = document.getElementById('footer-storage-progressbar');
+
+  if (!footerStorageUsed || !footerStorageBar) return;
+
+  const now = Date.now();
+  const validFiles = (activeFiles || []).filter((f) => {
+    const exp = new Date(f.expiresAt).getTime();
+    return exp > now;
+  });
+
+  const totalBytes = validFiles.reduce((acc, file) => acc + (Number(file.size) || 0), 0);
+  const count = validFiles.length;
+
+  // Supabase free tier storage allocation (1 GB = 1,073,741,824 bytes)
+  const MAX_STORAGE_BYTES = 1073741824;
+  const percent = Math.min(100, (totalBytes / MAX_STORAGE_BYTES) * 100);
+  const formattedUsed = dbService.formatBytes(totalBytes);
+  const percentDisplay = percent < 0.1 && percent > 0 ? '<0.1%' : `${percent.toFixed(1)}%`;
+
+  footerStorageUsed.textContent = `${formattedUsed} / 1 GB`;
+  footerStoragePercent.textContent = `(${percentDisplay})`;
+  footerFilesCount.textContent = `${count} ${count === 1 ? 'active file' : 'active files'}`;
+
+  // Min 1% visual fill when there is data so user sees the bar
+  const visualFill = totalBytes > 0 ? Math.max(1, percent) : 0;
+  footerStorageBar.style.width = `${visualFill}%`;
+
+  if (footerStorageProgressbar) {
+    footerStorageProgressbar.setAttribute('aria-valuenow', percent.toFixed(1));
+  }
+
+  if (percent >= 90) {
+    footerStorageBar.style.background = 'linear-gradient(90deg, #f87171, #ef4444)';
+  } else if (percent >= 75) {
+    footerStorageBar.style.background = 'linear-gradient(90deg, #fbbf24, #f59e0b)';
+  } else {
+    footerStorageBar.style.background = 'linear-gradient(90deg, #38bdf8, #818cf8)';
+  }
+}
+
+function updateFooterDbMode(mode) {
+  const badge = document.getElementById('footer-db-badge');
+  if (!badge) return;
+  if (mode === 'supabase') {
+    badge.className = 'db-badge status-supabase';
+    badge.textContent = 'Supabase Live';
+    badge.title = 'Connected to live Supabase Cloud Database & Storage';
+  } else {
+    badge.className = 'db-badge status-local';
+    badge.textContent = 'Local Vault';
+    badge.title = 'Running in browser local storage';
+  }
 }
 
 function startCountdownTicker() {
