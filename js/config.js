@@ -1,11 +1,11 @@
 /**
  * Share247 - Configuration Manager
- * Manages Supabase Project URL and Anon Public API Key with localStorage persistence.
+ * Live Supabase Project Credentials
  */
 
 export const DEFAULT_SUPABASE_CONFIG = {
-  supabaseUrl: "",
-  supabaseAnonKey: ""
+  supabaseUrl: "https://qwvjpxggcqoflydxxilf.supabase.co",
+  supabaseAnonKey: "sb_publishable_VUlfrTef3E1L0qD7U1y5RQ_wOt1oW4p"
 };
 
 const STORAGE_KEY = "share247_supabase_config";

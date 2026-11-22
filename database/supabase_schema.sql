@@ -1,9 +1,9 @@
 -- =====================================================================
 -- Share247 — Supabase Database & 7-Day Auto-Purge Lifecycle Schema
 -- =====================================================================
--- Run this entire script in your Supabase SQL Editor (Dashboard > SQL Editor)
--- It creates the files table, public storage bucket, RLS policies,
--- and automated 7-day cleanup jobs.
+-- Project: https://qwvjpxggcqoflydxxilf.supabase.co
+-- This script configures the files table, public-files bucket,
+-- Row Level Security (RLS), and pg_cron automated 7-day purging.
 
 -- 1. Create the files metadata table
 create table if not exists public.files (
@@ -28,12 +28,14 @@ create index if not exists idx_files_created_at on public.files (created_at desc
 alter table public.files enable row level security;
 
 -- Policy A: Anyone can view unexpired files (Public read)
+drop policy if exists "Allow public view active files" on public.files;
 create policy "Allow public view active files"
   on public.files
   for select
   using (expires_at > now());
 
 -- Policy B: Anyone can insert files (Public upload)
+drop policy if exists "Allow public insert files" on public.files;
 create policy "Allow public insert files"
   on public.files
   for insert
@@ -43,6 +45,7 @@ create policy "Allow public insert files"
   );
 
 -- Policy C: Anyone can increment the download counter
+drop policy if exists "Allow public increment download count" on public.files;
 create policy "Allow public increment download count"
   on public.files
   for update
@@ -63,11 +66,13 @@ on conflict (id) do update set
   file_size_limit = 104857600;
 
 -- Storage Bucket Policies
+drop policy if exists "Public Access to public-files bucket" on storage.objects;
 create policy "Public Access to public-files bucket"
   on storage.objects
   for select
   using (bucket_id = 'public-files');
 
+drop policy if exists "Public Upload to public-files bucket" on storage.objects;
 create policy "Public Upload to public-files bucket"
   on storage.objects
   for insert
@@ -76,6 +81,7 @@ create policy "Public Upload to public-files bucket"
     and (octet_length(name) <= 255)
   );
 
+drop policy if exists "Public Delete expired files" on storage.objects;
 create policy "Public Delete expired files"
   on storage.objects
   for delete
@@ -113,8 +119,7 @@ end;
 $$;
 
 -- 5. Schedule Automated 7-Day Purge with pg_cron
--- (pg_cron is enabled by default in Supabase Dashboard > Database > Extensions)
-create extension if not exists pg_cron;
+create extension if not exists pg_cron with schema extensions;
 
 -- Run cleanup every hour on the hour
 select cron.unschedule('purge-7day-expired-files') where exists (
