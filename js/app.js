@@ -183,17 +183,84 @@ function toggleSort(column) {
 // UPLOAD HANDLING
 // ==========================================
 
+function promptUploadOptions(file) {
+  return new Promise((resolve) => {
+    const uploadDialog = document.getElementById('upload-dialog');
+    const uploadModalName = document.getElementById('upload-modal-name');
+    const uploadModalMeta = document.getElementById('upload-modal-meta');
+    const uploadModalBadge = document.getElementById('upload-modal-badge');
+    const radioPublic = document.getElementById('radio-access-public');
+    const radioPin = document.getElementById('radio-access-pin');
+    const pinGroup = document.getElementById('pin-input-group');
+    const pinInput = document.getElementById('upload-pin-code');
+    const uploadForm = document.getElementById('upload-options-form');
+
+    const { iconClass, label } = getFileTypeDetails(file.name);
+    uploadModalBadge.className = `file-badge ${iconClass}`;
+    uploadModalBadge.textContent = label;
+    uploadModalName.textContent = file.name;
+    uploadModalMeta.textContent = `${dbService.formatBytes(file.size)} • Auto-purges after 7 days`;
+
+    radioPublic.checked = true;
+    radioPin.checked = false;
+    pinGroup.hidden = true;
+    pinInput.value = '';
+
+    const handleRadioChange = () => {
+      pinGroup.hidden = !radioPin.checked;
+      if (radioPin.checked) {
+        pinInput.focus();
+      }
+    };
+
+    radioPublic.onchange = handleRadioChange;
+    radioPin.onchange = handleRadioChange;
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      uploadForm.removeEventListener('submit', handleSubmit);
+      uploadDialog.removeEventListener('close', handleCancel);
+
+      let pin = null;
+      if (radioPin.checked) {
+        pin = pinInput.value.trim();
+        if (!pin) {
+          showToast('Please enter a PIN or select Public.', 'error');
+          return;
+        }
+      }
+
+      uploadDialog.close();
+      resolve({ proceed: true, pin });
+    };
+
+    const handleCancel = () => {
+      uploadForm.removeEventListener('submit', handleSubmit);
+      uploadDialog.removeEventListener('close', handleCancel);
+      resolve({ proceed: false, pin: null });
+    };
+
+    uploadForm.addEventListener('submit', handleSubmit);
+    uploadDialog.addEventListener('close', handleCancel, { once: true });
+
+    uploadDialog.showModal();
+  });
+}
+
 async function handleFiles(files) {
   for (const file of files) {
     if (file.size > 100 * 1024 * 1024) {
       showToast(`"${file.name}" exceeds 100 MB limit.`, 'error');
       continue;
     }
-    await uploadSingleFile(file);
+    const { proceed, pin } = await promptUploadOptions(file);
+    if (proceed) {
+      await uploadSingleFile(file, pin);
+    }
   }
 }
 
-async function uploadSingleFile(file) {
+async function uploadSingleFile(file, pin = null) {
   uploadWidget.hidden = false;
   uploadWidgetTitle.textContent = 'Uploading 1 item';
   widgetFileName.textContent = file.name;
@@ -209,12 +276,12 @@ async function uploadSingleFile(file) {
       const p = Math.round(percent);
       uploadProgressBar.value = p;
       widgetFilePercent.textContent = `${p}%`;
-    });
+    }, pin);
 
     uploadWidgetTitle.textContent = 'Upload complete';
     widgetFilePercent.textContent = 'Done';
     announcePolitely(`Uploaded ${file.name} successfully`);
-    showToast(`Shared "${file.name}" for 7 days!`, 'success');
+    showToast(pin ? `Shared "${file.name}" (PIN Protected)!` : `Shared "${file.name}" for 7 days!`, 'success');
     await refreshFilesList();
 
     // Auto open share modal
@@ -296,6 +363,7 @@ function renderFilesTable() {
           <div class="row-file-icon ${iconClass}">${label}</div>
           <div class="row-filename" title="${escapeHtml(file.name)}">
             <span>${escapeHtml(file.name)}</span>
+            ${file.hasPin ? `<span class="badge-pin-protected" title="Protected with PIN"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>PIN</span>` : ''}
           </div>
         </div>
       </td>
@@ -331,7 +399,7 @@ function renderFilesTable() {
     // Action handlers
     tr.querySelector('.btn-download').addEventListener('click', (e) => {
       e.stopPropagation();
-      triggerDownload(file);
+      handleDownloadAttempt(file);
     });
 
     tr.querySelector('.btn-share').addEventListener('click', (e) => {
@@ -445,6 +513,66 @@ function startCountdownTicker() {
 // DOWNLOAD & SHARE MODAL
 // ==========================================
 
+const unlockedFileIds = new Set();
+
+function handleDownloadAttempt(file, onSuccess) {
+  if (file.hasPin && !unlockedFileIds.has(file.id)) {
+    openPinModal(file, () => {
+      unlockedFileIds.add(file.id);
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        triggerDownload(file);
+      }
+    });
+    return;
+  }
+
+  if (onSuccess) {
+    onSuccess();
+  } else {
+    triggerDownload(file);
+  }
+}
+
+function openPinModal(file, onUnlocked) {
+  const pinDialog = document.getElementById('pin-dialog');
+  const pinModalName = document.getElementById('pin-modal-name');
+  const pinModalMeta = document.getElementById('pin-modal-meta');
+  const pinModalBadge = document.getElementById('pin-modal-badge');
+  const pinInput = document.getElementById('unlock-pin-code');
+  const errorFeedback = document.getElementById('pin-error-feedback');
+  const pinForm = document.getElementById('pin-unlock-form');
+
+  const { iconClass, label } = getFileTypeDetails(file.name);
+  pinModalBadge.className = `file-badge ${iconClass}`;
+  pinModalBadge.textContent = label;
+  pinModalName.textContent = file.name;
+  pinModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • 🔒 PIN Protected`;
+
+  pinInput.value = '';
+  errorFeedback.hidden = true;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const enteredPin = pinInput.value.trim();
+    if (enteredPin === String(file.pin).trim()) {
+      pinForm.removeEventListener('submit', handleSubmit);
+      unlockedFileIds.add(file.id);
+      pinDialog.close();
+      showToast('PIN verified successfully!', 'success');
+      if (onUnlocked) onUnlocked();
+    } else {
+      errorFeedback.hidden = false;
+      pinInput.select();
+      pinInput.focus();
+    }
+  };
+
+  pinForm.onsubmit = handleSubmit;
+  pinDialog.showModal();
+}
+
 async function triggerDownload(file) {
   try {
     await dbService.incrementDownload(file.id);
@@ -473,16 +601,17 @@ function openShareDialog(file) {
   shareModalIconBadge.className = `file-badge ${iconClass}`;
   shareModalIconBadge.textContent = label;
   shareModalName.textContent = file.name;
-  shareModalSize.textContent = file.formattedSize || dbService.formatBytes(file.size);
+  shareModalSize.textContent = `${file.formattedSize || dbService.formatBytes(file.size)}${file.hasPin ? ' • 🔒 PIN Protected' : ''}`;
   shareModalExpires.textContent = `Auto-purges in ${countdownText}`;
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?file=${encodeURIComponent(file.id)}`;
   shareUrlInput.value = shareUrl;
 
-  btnModalDownload.href = file.downloadUrl;
-  btnModalDownload.download = file.name;
-  btnModalDownload.onclick = () => {
-    dbService.incrementDownload(file.id);
+  btnModalDownload.href = '#';
+  btnModalDownload.removeAttribute('download');
+  btnModalDownload.onclick = (e) => {
+    e.preventDefault();
+    handleDownloadAttempt(file);
   };
 
   shareDialog.showModal();
@@ -495,7 +624,14 @@ async function checkUrlQueryParams() {
     try {
       const file = await dbService.getFileById(fileId);
       if (file) {
-        openShareDialog(file);
+        if (file.hasPin && !unlockedFileIds.has(file.id)) {
+          openPinModal(file, () => {
+            unlockedFileIds.add(file.id);
+            openShareDialog(file);
+          });
+        } else {
+          openShareDialog(file);
+        }
       } else {
         showToast('Requested file does not exist or has already expired after 7 days.', 'error');
       }

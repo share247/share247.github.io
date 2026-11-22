@@ -21,6 +21,12 @@ class DatabaseService {
     if (isSupabaseConfigured(config)) {
       try {
         await this.initSupabase(config);
+        // Verify active database connection with a probe
+        const { error } = await this.supabase.from('files').select('id').limit(1);
+        if (error) {
+          console.error('Share247: Supabase probe failed:', error);
+          throw error;
+        }
         this.mode = 'supabase';
         console.info('Share247: Connected to live Supabase project.');
         return { mode: 'supabase' };
@@ -61,7 +67,31 @@ class DatabaseService {
     this.supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
   }
 
-  async uploadFileToSupabase(file, onProgress) {
+  mapSupabaseRecord(r) {
+    if (!r) return null;
+    const rawType = r.type || '';
+    const hasPinInType = rawType.includes('; pin=');
+    const pinVal = r.pin || (hasPinInType ? decodeURIComponent(rawType.split('; pin=')[1]) : null);
+    const cleanType = rawType.split(';')[0];
+
+    return {
+      id: r.id,
+      name: r.name,
+      size: r.size,
+      formattedSize: r.formatted_size,
+      type: cleanType,
+      extension: r.extension,
+      storagePath: r.storage_path,
+      downloadUrl: r.download_url,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+      downloadsCount: r.downloads_count,
+      hasPin: Boolean(pinVal),
+      pin: pinVal
+    };
+  }
+
+  async uploadFileToSupabase(file, onProgress, pin = null) {
     const fileId = crypto.randomUUID ? crypto.randomUUID() : 'f_' + Date.now().toString(36);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const storagePath = `${fileId}/${safeName}`;
@@ -92,12 +122,15 @@ class DatabaseService {
     const now = Date.now();
     const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
 
+    const cleanType = file.type || 'application/octet-stream';
+    const typeWithPin = pin ? `${cleanType}; pin=${encodeURIComponent(pin)}` : cleanType;
+
     // 3. Insert metadata record in 'files' table
     const fileRecord = {
       name: file.name,
       size: file.size,
       formatted_size: this.formatBytes(file.size),
-      type: file.type || 'application/octet-stream',
+      type: typeWithPin,
       extension: this.getFileExtension(file.name),
       storage_path: storagePath,
       download_url: publicUrl,
@@ -118,19 +151,7 @@ class DatabaseService {
 
     if (onProgress) onProgress(100);
 
-    return {
-      id: inserted.id,
-      name: inserted.name,
-      size: inserted.size,
-      formattedSize: inserted.formatted_size,
-      type: inserted.type,
-      extension: inserted.extension,
-      storagePath: inserted.storage_path,
-      downloadUrl: inserted.download_url,
-      createdAt: inserted.created_at,
-      expiresAt: inserted.expires_at,
-      downloadsCount: inserted.downloads_count
-    };
+    return this.mapSupabaseRecord(inserted);
   }
 
   async getActiveFilesFromSupabase() {
@@ -145,19 +166,7 @@ class DatabaseService {
       throw new Error(error.message);
     }
 
-    return (data || []).map(r => ({
-      id: r.id,
-      name: r.name,
-      size: r.size,
-      formattedSize: r.formatted_size,
-      type: r.type,
-      extension: r.extension,
-      storagePath: r.storage_path,
-      downloadUrl: r.download_url,
-      createdAt: r.created_at,
-      expiresAt: r.expires_at,
-      downloadsCount: r.downloads_count
-    }));
+    return (data || []).map(r => this.mapSupabaseRecord(r));
   }
 
   async getFileByIdFromSupabase(fileId) {
@@ -170,19 +179,7 @@ class DatabaseService {
     if (error || !data) return null;
     if (new Date(data.expires_at).getTime() <= Date.now()) return null; // Expired
 
-    return {
-      id: data.id,
-      name: data.name,
-      size: data.size,
-      formattedSize: data.formatted_size,
-      type: data.type,
-      extension: data.extension,
-      storagePath: data.storage_path,
-      downloadUrl: data.download_url,
-      createdAt: data.created_at,
-      expiresAt: data.expires_at,
-      downloadsCount: data.downloads_count
-    };
+    return this.mapSupabaseRecord(data);
   }
 
   async incrementSupabaseDownload(fileId) {
@@ -270,7 +267,9 @@ class DatabaseService {
       blob: file,
       createdAt: new Date(now).toISOString(),
       expiresAt: expiresAt,
-      downloadsCount: 0
+      downloadsCount: 0,
+      hasPin: Boolean(pin),
+      pin: pin || null
     };
 
     return new Promise((resolve, reject) => {
@@ -351,11 +350,11 @@ class DatabaseService {
   // UNIFIED PUBLIC INTERFACE
   // ==========================================
 
-  async uploadFile(file, onProgress) {
+  async uploadFile(file, onProgress, pin = null) {
     if (this.mode === 'supabase') {
-      return this.uploadFileToSupabase(file, onProgress);
+      return this.uploadFileToSupabase(file, onProgress, pin);
     }
-    return this.uploadFileToLocal(file, onProgress);
+    return this.uploadFileToLocal(file, onProgress, pin);
   }
 
   async getActiveFiles() {

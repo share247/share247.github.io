@@ -206,6 +206,98 @@
     </div>
   </aside>
 
+  <!-- Upload Options Dialog (Public vs PIN Protected) -->
+  <dialog id="upload-dialog" aria-labelledby="upload-dialog-title">
+    <div class="dialog-box">
+      <div class="dialog-header">
+        <h3 id="upload-dialog-title">Upload File to Public Vault</h3>
+        <button type="button" class="btn-dialog-close" aria-label="Close dialog">&times;</button>
+      </div>
+
+      <div class="dialog-file-card">
+        <div id="upload-modal-badge" class="file-badge icon-type-blue">FILE</div>
+        <div class="dialog-file-meta">
+          <h4 id="upload-modal-name">filename.ext</h4>
+          <p id="upload-modal-meta">0 B &bull; Auto-purges after 7 days</p>
+        </div>
+      </div>
+
+      <form id="upload-options-form">
+        <div class="dialog-field">
+          <label>Sharing Security</label>
+          <div class="access-options">
+            <label class="access-option-label">
+              <input type="radio" name="access_type" value="public" checked id="radio-access-public">
+              <span class="access-option-box">
+                <span class="access-icon">🌐</span>
+                <span class="access-text">
+                  <strong>Public</strong>
+                  <small>Anyone can view and download</small>
+                </span>
+              </span>
+            </label>
+            <label class="access-option-label">
+              <input type="radio" name="access_type" value="pin" id="radio-access-pin">
+              <span class="access-option-box">
+                <span class="access-icon">🔒</span>
+                <span class="access-text">
+                  <strong>PIN Protected</strong>
+                  <small>Requires a PIN code to download</small>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div id="pin-input-group" class="dialog-field" hidden>
+          <label for="upload-pin-code">Set Security PIN</label>
+          <input type="text" id="upload-pin-code" maxlength="12" placeholder="e.g. 1234" autocomplete="off" inputmode="numeric">
+          <p class="dialog-hint">Users on other devices will need to enter this PIN to unlock and download the file.</p>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" class="btn-action-secondary btn-dialog-close">Cancel</button>
+          <button type="submit" id="btn-confirm-upload" class="btn-action-primary">Upload &amp; Share</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- PIN Unlock Dialog -->
+  <dialog id="pin-dialog" aria-labelledby="pin-dialog-title">
+    <div class="dialog-box">
+      <div class="dialog-header">
+        <h3 id="pin-dialog-title">🔒 Protected File</h3>
+        <button type="button" class="btn-dialog-close" aria-label="Close dialog">&times;</button>
+      </div>
+
+      <p class="dialog-desc">
+        This file is protected with a security PIN. Enter the PIN to unlock and download.
+      </p>
+
+      <div class="dialog-file-card">
+        <div id="pin-modal-badge" class="file-badge icon-type-amber">PIN</div>
+        <div class="dialog-file-meta">
+          <h4 id="pin-modal-name">filename.ext</h4>
+          <p id="pin-modal-meta">0 B</p>
+        </div>
+      </div>
+
+      <form id="pin-unlock-form">
+        <div class="dialog-field">
+          <label for="unlock-pin-code">Enter PIN Code</label>
+          <input type="password" id="unlock-pin-code" placeholder="Enter PIN (e.g. 1234)" required autocomplete="off" autofocus>
+          <p id="pin-error-feedback" class="pin-error-msg" hidden>⚠️ Incorrect PIN. Please try again.</p>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" class="btn-action-secondary btn-dialog-close">Cancel</button>
+          <button type="submit" class="btn-action-primary">Unlock &amp; Download</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <!-- Direct File Share & Download Dialog -->
   <dialog id="share-dialog" aria-labelledby="share-dialog-title">
     <div class="dialog-box">

@@ -24,6 +24,9 @@ create table if not exists public.files (
 create index if not exists idx_files_expires_at on public.files (expires_at asc);
 create index if not exists idx_files_created_at on public.files (created_at desc);
 
+-- Optional PIN column for password protected sharing
+alter table public.files add column if not exists pin text;
+
 -- 2. Enable Row Level Security (RLS)
 alter table public.files enable row level security;
 

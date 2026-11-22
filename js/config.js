@@ -11,13 +11,20 @@ export const DEFAULT_SUPABASE_CONFIG = {
 const STORAGE_KEY = "share247_supabase_config";
 
 export function getStoredSupabaseConfig() {
+  // If live credentials have been injected during build, ALWAYS prioritize them
+  if (isSupabaseConfigured(DEFAULT_SUPABASE_CONFIG)) {
+    return DEFAULT_SUPABASE_CONFIG;
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.supabaseUrl && parsed.supabaseAnonKey) {
+      if (parsed && isSupabaseConfigured(parsed)) {
         return parsed;
       }
+      // Clean up invalid or placeholder configurations from previous builds
+      localStorage.removeItem(STORAGE_KEY);
     }
   } catch (e) {
     console.warn("Could not read stored Supabase config:", e);
