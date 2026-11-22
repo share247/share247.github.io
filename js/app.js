@@ -620,7 +620,7 @@ function updateFooterStorageTracker() {
   const footerFilesCount = document.getElementById('footer-files-count');
   const footerStorageFill = document.getElementById('footer-storage-fill');
 
-  if (!footerStorageUsed || !footerStorageFill) return;
+  if (!footerStorageFill) return;
 
   const now = Date.now();
   const validFiles = (activeFiles || []).filter((f) => {
@@ -637,14 +637,19 @@ function updateFooterStorageTracker() {
   const formattedUsed = dbService.formatBytes(totalBytes);
   const percentDisplay = percent < 0.1 && percent > 0 ? '<0.1%' : `${percent.toFixed(1)}%`;
 
-  footerStorageUsed.textContent = `${formattedUsed} / 1 GB`;
-  footerStoragePercent.textContent = `(${percentDisplay})`;
-  footerFilesCount.textContent = `${count} ${count === 1 ? 'active file' : 'active files'}`;
+  if (footerStorageUsed) footerStorageUsed.textContent = `${formattedUsed} / 1 GB`;
+  if (footerStoragePercent) footerStoragePercent.textContent = `(${percentDisplay})`;
+  if (footerFilesCount) footerFilesCount.textContent = `${count} ${count === 1 ? 'active file' : 'active files'}`;
 
   // Red filled space bar expanding across the full footer width
   // Ensure a minimum visible trace of 0.8% if any files exist so the red fill is clearly visible
   const fillWidth = totalBytes > 0 ? Math.max(0.8, percent) : 0;
   footerStorageFill.style.width = `${fillWidth}%`;
+
+  const vaultFooter = document.getElementById('vault-footer');
+  if (vaultFooter) {
+    vaultFooter.title = `Database Space: ${formattedUsed} / 1 GB (${percentDisplay}) • ${count} active files`;
+  }
 }
 
 function updateFooterDbMode(mode) {
