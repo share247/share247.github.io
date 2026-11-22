@@ -60,14 +60,56 @@ async function initApp() {
   setupEventListeners();
 
   try {
+    showLoader(true);
     const { mode } = await dbService.init();
     updateFooterDbMode(mode);
-    await refreshFilesList();
+    await refreshFilesList(false);
+    showLoader(false);
     checkUrlQueryParams();
     startCountdownTicker();
+
+    // Realtime: Listen for new files added from other devices!
+    dbService.subscribeToFiles((newFile) => {
+      const existingIdx = activeFiles.findIndex(f => f.id === newFile.id);
+      if (existingIdx === -1) {
+        activeFiles.unshift(newFile);
+        renderFilesTable();
+        showToast(`New file shared: "${newFile.name}"`, 'info');
+        announcePolitely(`New file shared: ${newFile.name}`);
+      }
+    });
+
+    // Background sync polling every 8s as fallback
+    setInterval(async () => {
+      try {
+        const latest = await dbService.getActiveFiles();
+        if (latest && JSON.stringify(latest.map(f => f.id)) !== JSON.stringify(activeFiles.map(f => f.id))) {
+          activeFiles = latest;
+          renderFilesTable();
+        }
+      } catch (_) {}
+    }, 8000);
+
   } catch (err) {
+    showLoader(false);
     console.error('Initialization error:', err);
     showToast('Failed to initialize database.', 'error');
+  }
+}
+
+function showLoader(visible) {
+  const loader = document.getElementById('vault-loader');
+  if (!loader) return;
+  if (visible) {
+    loader.classList.remove('fade-out');
+    loader.hidden = false;
+  } else {
+    loader.classList.add('fade-out');
+    setTimeout(() => {
+      if (loader.classList.contains('fade-out')) {
+        loader.hidden = true;
+      }
+    }, 300);
   }
 }
 
@@ -262,38 +304,78 @@ async function handleFiles(files) {
 
 async function uploadSingleFile(file, pin = null) {
   uploadWidget.hidden = false;
-  uploadWidgetTitle.textContent = 'Uploading 1 item';
+  uploadWidgetTitle.textContent = 'Uploading File';
   widgetFileName.textContent = file.name;
-  widgetFilePercent.textContent = '0%';
-  uploadProgressBar.value = 0;
+
+  const tracerBarFill = document.getElementById('tracer-bar-fill');
+  const widgetFilePercent = document.getElementById('widget-file-percent');
+  const tracerSize = document.getElementById('tracer-size');
+  const tracerSpeed = document.getElementById('tracer-speed');
+  const tracerEta = document.getElementById('tracer-eta');
+  const pulseDot = document.getElementById('tracer-pulse-dot');
+
+  if (pulseDot) pulseDot.style.backgroundColor = '#38bdf8';
+  if (tracerBarFill) tracerBarFill.style.width = '0%';
+  if (widgetFilePercent) widgetFilePercent.textContent = '0%';
+  if (tracerSize) tracerSize.textContent = `0 B / ${dbService.formatBytes(file.size)}`;
+  if (tracerSpeed) tracerSpeed.textContent = 'Measuring...';
+  if (tracerEta) tracerEta.textContent = 'Calculating...';
 
   const { iconClass, label } = getFileTypeDetails(file.name);
   widgetFileIcon.className = `widget-badge ${iconClass}`;
   widgetFileIcon.textContent = label;
 
   try {
-    const uploaded = await dbService.uploadFile(file, (percent) => {
-      const p = Math.round(percent);
-      uploadProgressBar.value = p;
-      widgetFilePercent.textContent = `${p}%`;
+    const uploaded = await dbService.uploadFile(file, (telemetry) => {
+      if (typeof telemetry === 'number') {
+        telemetry = { percent: telemetry };
+      }
+      const {
+        percent = 0,
+        formattedLoaded = '0 B',
+        formattedTotal = dbService.formatBytes(file.size),
+        formattedSpeed = '--',
+        formattedEta = '--'
+      } = telemetry;
+
+      if (tracerBarFill) tracerBarFill.style.width = `${percent}%`;
+      if (widgetFilePercent) widgetFilePercent.textContent = `${percent}%`;
+      if (tracerSize) tracerSize.textContent = `${formattedLoaded} / ${formattedTotal}`;
+      if (tracerSpeed) tracerSpeed.textContent = formattedSpeed;
+      if (tracerEta) tracerEta.textContent = formattedEta;
     }, pin);
 
-    uploadWidgetTitle.textContent = 'Upload complete';
-    widgetFilePercent.textContent = 'Done';
+    uploadWidgetTitle.textContent = 'Upload Complete';
+    if (widgetFilePercent) widgetFilePercent.textContent = '100%';
+    if (tracerBarFill) tracerBarFill.style.width = '100%';
+    if (tracerSpeed) tracerSpeed.textContent = 'Done';
+    if (tracerEta) tracerEta.textContent = 'Saved';
+    if (pulseDot) pulseDot.style.backgroundColor = '#4ade80';
+
     announcePolitely(`Uploaded ${file.name} successfully`);
     showToast(pin ? `Shared "${file.name}" (PIN Protected)!` : `Shared "${file.name}" for 7 days!`, 'success');
-    await refreshFilesList();
+
+    // Instantly add to dashboard runtime so it views instantly!
+    const existingIdx = activeFiles.findIndex(f => f.id === uploaded.id);
+    if (existingIdx >= 0) {
+      activeFiles[existingIdx] = uploaded;
+    } else {
+      activeFiles.unshift(uploaded);
+    }
+    renderFilesTable();
+    updateFooterStorageTracker();
 
     // Auto open share modal
     openShareDialog(uploaded);
   } catch (err) {
     console.error('Upload failed:', err);
-    uploadWidgetTitle.textContent = 'Upload failed';
+    uploadWidgetTitle.textContent = 'Upload Failed';
+    if (pulseDot) pulseDot.style.backgroundColor = '#ef4444';
     showToast(`Upload failed: ${err.message || err}`, 'error');
   } finally {
     setTimeout(() => {
       uploadWidget.hidden = true;
-    }, 4000);
+    }, 4500);
   }
 }
 
@@ -301,13 +383,16 @@ async function uploadSingleFile(file, pin = null) {
 // TABLE RENDERING
 // ==========================================
 
-async function refreshFilesList() {
+async function refreshFilesList(showSpinner = true) {
   try {
+    if (showSpinner) showLoader(true);
     activeFiles = await dbService.getActiveFiles();
     renderFilesTable();
   } catch (err) {
     console.error('Failed to load files:', err);
     showToast('Could not fetch active files.', 'error');
+  } finally {
+    if (showSpinner) showLoader(false);
   }
 }
 
@@ -426,10 +511,9 @@ function updateFooterStorageTracker() {
   const footerStorageUsed = document.getElementById('footer-storage-used');
   const footerStoragePercent = document.getElementById('footer-storage-percent');
   const footerFilesCount = document.getElementById('footer-files-count');
-  const footerStorageBar = document.getElementById('footer-storage-bar');
-  const footerStorageProgressbar = document.getElementById('footer-storage-progressbar');
+  const footerStorageFill = document.getElementById('footer-storage-fill');
 
-  if (!footerStorageUsed || !footerStorageBar) return;
+  if (!footerStorageUsed || !footerStorageFill) return;
 
   const now = Date.now();
   const validFiles = (activeFiles || []).filter((f) => {
@@ -450,21 +534,10 @@ function updateFooterStorageTracker() {
   footerStoragePercent.textContent = `(${percentDisplay})`;
   footerFilesCount.textContent = `${count} ${count === 1 ? 'active file' : 'active files'}`;
 
-  // Min 1% visual fill when there is data so user sees the bar
-  const visualFill = totalBytes > 0 ? Math.max(1, percent) : 0;
-  footerStorageBar.style.width = `${visualFill}%`;
-
-  if (footerStorageProgressbar) {
-    footerStorageProgressbar.setAttribute('aria-valuenow', percent.toFixed(1));
-  }
-
-  if (percent >= 90) {
-    footerStorageBar.style.background = 'linear-gradient(90deg, #f87171, #ef4444)';
-  } else if (percent >= 75) {
-    footerStorageBar.style.background = 'linear-gradient(90deg, #fbbf24, #f59e0b)';
-  } else {
-    footerStorageBar.style.background = 'linear-gradient(90deg, #38bdf8, #818cf8)';
-  }
+  // Red filled space bar expanding across the full footer width
+  // Ensure a minimum visible trace of 0.8% if any files exist so the red fill is clearly visible
+  const fillWidth = totalBytes > 0 ? Math.max(0.8, percent) : 0;
+  footerStorageFill.style.width = `${fillWidth}%`;
 }
 
 function updateFooterDbMode(mode) {

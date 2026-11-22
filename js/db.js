@@ -92,26 +92,73 @@ class DatabaseService {
   }
 
   async uploadFileToSupabase(file, onProgress, pin = null) {
+    const config = getStoredSupabaseConfig();
     const fileId = crypto.randomUUID ? crypto.randomUUID() : 'f_' + Date.now().toString(36);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const storagePath = `${fileId}/${safeName}`;
 
-    // Simulate progress updates for UI feedback
-    if (onProgress) onProgress(20);
+    // 1. Upload binary file using XMLHttpRequest for real-time telemetry (bytes, speed, ETA)
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const uploadUrl = `${config.supabaseUrl}/storage/v1/object/public-files/${storagePath}`;
+      xhr.open('POST', uploadUrl, true);
+      xhr.setRequestHeader('apikey', config.supabaseAnonKey);
+      xhr.setRequestHeader('Authorization', `Bearer ${config.supabaseAnonKey}`);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.setRequestHeader('x-upsert', 'false');
 
-    // 1. Upload binary file to 'public-files' storage bucket
-    const { data: uploadData, error: uploadError } = await this.supabase.storage
-      .from('public-files')
-      .upload(storagePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
+      let lastLoaded = 0;
+      let lastTime = performance.now();
+      let smoothedSpeed = 0;
 
-    if (uploadError) {
-      throw new Error(uploadError.message || 'Storage upload failed');
-    }
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const now = performance.now();
+          const timeElapsed = (now - lastTime) / 1000;
+          if (timeElapsed >= 0.2 || e.loaded === e.total) {
+            const bytesSince = e.loaded - lastLoaded;
+            const currentSpeed = bytesSince / (timeElapsed || 0.001);
+            smoothedSpeed = smoothedSpeed === 0 ? currentSpeed : (smoothedSpeed * 0.65 + currentSpeed * 0.35);
+            lastLoaded = e.loaded;
+            lastTime = now;
+          }
 
-    if (onProgress) onProgress(70);
+          const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+          const remainingBytes = Math.max(0, e.total - e.loaded);
+          const etaSec = smoothedSpeed > 0 ? Math.ceil(remainingBytes / smoothedSpeed) : 0;
+
+          if (onProgress) {
+            onProgress({
+              percent,
+              loaded: e.loaded,
+              total: e.total,
+              speed: smoothedSpeed,
+              eta: etaSec,
+              formattedLoaded: this.formatBytes(e.loaded),
+              formattedTotal: this.formatBytes(e.total),
+              formattedSpeed: `${this.formatBytes(smoothedSpeed)}/s`,
+              formattedEta: etaSec > 60 ? `${Math.floor(etaSec / 60)}m ${etaSec % 60}s` : (etaSec > 0 ? `${etaSec}s left` : 'Finalizing...')
+            });
+          }
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.response);
+        } else {
+          try {
+            const errJson = JSON.parse(xhr.responseText);
+            reject(new Error(errJson.message || errJson.error || `Upload failed with status ${xhr.status}`));
+          } catch (_) {
+            reject(new Error(`Upload failed with HTTP ${xhr.status}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network error during file upload'));
+      xhr.send(file);
+    });
 
     // 2. Get Public Download URL
     const { data: urlData } = this.supabase.storage
@@ -149,7 +196,19 @@ class DatabaseService {
       throw new Error(insertError.message || 'Failed to insert database record');
     }
 
-    if (onProgress) onProgress(100);
+    if (onProgress) {
+      onProgress({
+        percent: 100,
+        loaded: file.size,
+        total: file.size,
+        speed: 0,
+        eta: 0,
+        formattedLoaded: this.formatBytes(file.size),
+        formattedTotal: this.formatBytes(file.size),
+        formattedSpeed: 'Done',
+        formattedEta: 'Complete'
+      });
+    }
 
     return this.mapSupabaseRecord(inserted);
   }
@@ -376,6 +435,25 @@ class DatabaseService {
       return this.incrementSupabaseDownload(fileId);
     }
     return this.incrementLocalDownload(fileId);
+  }
+
+  subscribeToFiles(onFileAdded) {
+    if (this.mode !== 'supabase' || !this.supabase) return null;
+    try {
+      const channel = this.supabase
+        .channel('realtime:files')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'files' }, (payload) => {
+          if (payload && payload.new) {
+            const mapped = this.mapSupabaseRecord(payload.new);
+            if (onFileAdded) onFileAdded(mapped);
+          }
+        })
+        .subscribe();
+      return channel;
+    } catch (e) {
+      console.warn('Realtime subscription error:', e);
+      return null;
+    }
   }
 }
 
