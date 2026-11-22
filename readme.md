@@ -78,3 +78,10 @@ Automated deletion of both storage objects and database records is handled by Po
   - Sorting by Name, Date, or Size.
   - Fullscreen drag-and-drop overlay.
   - Floating upload widget with progress feedback.
+
+---
+
+## 👥 Contributors
+
+- [**Mostafa Kamal** (@mostafa-cse)](https://github.com/mostafa-cse)
+
