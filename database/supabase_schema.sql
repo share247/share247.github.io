@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Share247 — Supabase Database & 7-Day Auto-Purge Lifecycle Schema
 -- =====================================================================
--- Project: https://qwvjpxggcqoflydxxilf.supabase.co
+-- Project: https://your-project-id.supabase.co
 -- This script configures the files table, public-files bucket,
 -- Row Level Security (RLS), and pg_cron automated 7-day purging.
 

@@ -4,8 +4,8 @@
  */
 
 export const DEFAULT_SUPABASE_CONFIG = {
-  supabaseUrl: "https://qwvjpxggcqoflydxxilf.supabase.co",
-  supabaseAnonKey: "sb_publishable_VUlfrTef3E1L0qD7U1y5RQ_wOt1oW4p"
+  supabaseUrl: "__SUPABASE_URL__",
+  supabaseAnonKey: "__SUPABASE_ANON_KEY__"
 };
 
 const STORAGE_KEY = "share247_supabase_config";
@@ -50,6 +50,7 @@ export function isSupabaseConfigured(config) {
     config.supabaseUrl &&
     config.supabaseAnonKey &&
     config.supabaseUrl.startsWith("https://") &&
-    !config.supabaseUrl.includes("YOUR_")
+    !config.supabaseUrl.includes("YOUR_") &&
+    !config.supabaseUrl.includes("__SUPABASE_")
   );
 }
