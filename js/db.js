@@ -257,6 +257,34 @@ class DatabaseService {
     }
   }
 
+  async deleteFileFromSupabase(fileId, storagePath) {
+    // 1. Remove binary file from Supabase storage bucket
+    if (storagePath) {
+      try {
+        await this.supabase.storage.from('public-files').remove([storagePath]);
+      } catch (e) {
+        console.warn('Share247: Supabase storage remove error:', e);
+      }
+    }
+
+    // 2. Delete metadata row from files table
+    const { error } = await this.supabase
+      .from('files')
+      .delete()
+      .eq('id', fileId);
+
+    // If direct DELETE is restricted by RLS on public.files, mark expires_at to past so it's excluded immediately
+    if (error) {
+      console.warn('Share247: Hard delete from table blocked, setting expired:', error);
+      await this.supabase
+        .from('files')
+        .update({ expires_at: new Date(Date.now() - 60000).toISOString() })
+        .eq('id', fileId);
+    }
+
+    return true;
+  }
+
   // ==========================================
   // INDEXEDDB LOCAL FALLBACK IMPLEMENTATION
   // ==========================================
@@ -405,6 +433,17 @@ class DatabaseService {
     });
   }
 
+  async deleteFileFromLocal(fileId) {
+    if (!this.idb) return false;
+    return new Promise((resolve, reject) => {
+      const tx = this.idb.transaction(['files'], 'readwrite');
+      const store = tx.objectStore('files');
+      const req = store.delete(fileId);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   // ==========================================
   // UNIFIED PUBLIC INTERFACE
   // ==========================================
@@ -435,6 +474,13 @@ class DatabaseService {
       return this.incrementSupabaseDownload(fileId);
     }
     return this.incrementLocalDownload(fileId);
+  }
+
+  async deleteFile(fileId, storagePath) {
+    if (this.mode === 'supabase') {
+      return this.deleteFileFromSupabase(fileId, storagePath);
+    }
+    return this.deleteFileFromLocal(fileId);
   }
 
   subscribeToFiles(onFileAdded) {

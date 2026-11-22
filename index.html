@@ -194,13 +194,15 @@
   <!-- Fullscreen Drag & Drop Overlay -->
   <div id="drag-overlay" class="drag-overlay" hidden>
     <div class="drag-box">
-      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" aria-hidden="true">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="17 8 12 3 7 8"></polyline>
-        <line x1="12" y1="3" x2="12" y2="15"></line>
-      </svg>
-      <h3>Drop files to upload</h3>
-      <p>Files will be publicly available and auto-delete in 7 days</p>
+      <div class="drag-icon-pulse">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+          <path d="M12 12v9"></path>
+          <path d="m16 16-4-4-4 4"></path>
+        </svg>
+      </div>
+      <h3>Drop files to upload instantly</h3>
+      <p>Ephemeral 7-day public cloud vault &bull; Release anywhere to share</p>
     </div>
   </div>
 
@@ -247,12 +249,42 @@
     </div>
   </aside>
 
-  <!-- Upload Options Dialog (Public vs PIN Protected) -->
+  <!-- Upload Options Dialog (Public vs PIN Protected) with In-Modal Drag & Drop -->
   <dialog id="upload-dialog" aria-labelledby="upload-dialog-title">
     <div class="dialog-box">
       <div class="dialog-header">
-        <h3 id="upload-dialog-title">Upload File to Public Vault</h3>
-        <button type="button" class="btn-dialog-close" aria-label="Close dialog">&times;</button>
+        <div class="dialog-title-group">
+          <div class="dialog-title-icon icon-upload-modal">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+          </div>
+          <h3 id="upload-dialog-title">Upload &amp; Share File</h3>
+        </div>
+        <button type="button" class="btn-dialog-close" aria-label="Close dialog">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- In-Modal Drag & Drop Zone -->
+      <div id="modal-dropzone" class="modal-dropzone" role="button" tabindex="0" title="Click or drag file here to change file">
+        <div class="dropzone-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+            <path d="M12 12v9"></path>
+            <path d="m16 16-4-4-4 4"></path>
+          </svg>
+        </div>
+        <div class="dropzone-text">
+          <span class="dropzone-prompt"><strong>Drag &amp; drop file here</strong> or <span class="dropzone-browse">browse</span></span>
+          <span class="dropzone-limit">Auto-purges in 7 days &bull; Max 100 MB</span>
+        </div>
+        <input type="file" id="modal-file-picker" hidden>
       </div>
 
       <div class="dialog-file-card">
@@ -292,7 +324,7 @@
 
         <div id="pin-input-group" class="dialog-field" hidden>
           <label for="upload-pin-code">Set Security PIN</label>
-          <input type="text" id="upload-pin-code" maxlength="12" placeholder="e.g. 1234" autocomplete="off" inputmode="numeric">
+          <input type="text" id="upload-pin-code" class="pin-input-field" maxlength="12" placeholder="e.g. 1234" autocomplete="off" inputmode="numeric">
           <p class="dialog-hint">Users on other devices will need to enter this PIN to unlock and download the file.</p>
         </div>
 
@@ -308,32 +340,51 @@
   <dialog id="pin-dialog" aria-labelledby="pin-dialog-title">
     <div class="dialog-box">
       <div class="dialog-header">
-        <h3 id="pin-dialog-title">🔒 Protected File</h3>
-        <button type="button" class="btn-dialog-close" aria-label="Close dialog">&times;</button>
+        <div class="dialog-title-group">
+          <div class="dialog-title-icon icon-pin-locked">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h3 id="pin-dialog-title">Protected File</h3>
+        </div>
+        <button type="button" class="btn-dialog-close" aria-label="Close dialog">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
 
       <p class="dialog-desc">
-        This file is protected with a security PIN. Enter the PIN to unlock and download.
+        This file is secured with a access PIN. Enter the PIN to unlock and download.
       </p>
 
       <div class="dialog-file-card">
         <div id="pin-modal-badge" class="file-badge icon-type-amber">PIN</div>
         <div class="dialog-file-meta">
           <h4 id="pin-modal-name">filename.ext</h4>
-          <p id="pin-modal-meta">0 B</p>
+          <p id="pin-modal-meta">0 B &bull; 🔒 PIN Protected</p>
         </div>
       </div>
 
       <form id="pin-unlock-form">
         <div class="dialog-field">
           <label for="unlock-pin-code">Enter PIN Code</label>
-          <input type="password" id="unlock-pin-code" placeholder="Enter PIN (e.g. 1234)" required autocomplete="off" autofocus>
+          <input type="password" id="unlock-pin-code" class="pin-input-field" placeholder="Enter PIN (e.g. 1234)" required autocomplete="off" autofocus>
           <p id="pin-error-feedback" class="pin-error-msg" hidden>⚠️ Incorrect PIN. Please try again.</p>
         </div>
 
         <div class="dialog-actions">
           <button type="button" class="btn-action-secondary btn-dialog-close">Cancel</button>
-          <button type="submit" class="btn-action-primary">Unlock &amp; Download</button>
+          <button type="submit" class="btn-action-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+            </svg>
+            Unlock &amp; Download
+          </button>
         </div>
       </form>
     </div>
@@ -343,8 +394,24 @@
   <dialog id="share-dialog" aria-labelledby="share-dialog-title">
     <div class="dialog-box">
       <div class="dialog-header">
-        <h3 id="share-dialog-title">File Details</h3>
-        <button type="button" class="btn-dialog-close" aria-label="Close dialog">&times;</button>
+        <div class="dialog-title-group">
+          <div class="dialog-title-icon icon-details">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <h3 id="share-dialog-title">File Details</h3>
+        </div>
+        <button type="button" class="btn-dialog-close" aria-label="Close dialog">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
       
       <div class="dialog-file-card">
@@ -359,17 +426,32 @@
         <label for="share-url-input">Direct Shareable Link</label>
         <div class="input-with-button">
           <input type="text" id="share-url-input" readonly>
-          <button id="btn-copy-share-url" class="btn-action-primary" type="button">Copy Link</button>
+          <button id="btn-copy-share-url" class="btn-copy-link" type="button">
+            <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span class="copy-label">Copy Link</span>
+          </button>
         </div>
-        <p class="dialog-hint">Anyone with this link can download this file directly.</p>
+        <p class="dialog-hint">Anyone with this link can view and download this file directly.</p>
       </div>
 
       <div class="dialog-actions">
-        <form method="dialog">
+        <!-- Delete File Option directly inside Modal -->
+        <button id="btn-modal-delete" type="button" class="btn-action-danger" title="Permanently delete this file from vault">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          <span>Delete</span>
+        </button>
+
+        <form method="dialog" style="display: inline-flex;">
           <button class="btn-action-secondary" value="close">Close</button>
         </form>
         <a id="btn-modal-download" href="#" class="btn-action-primary" download>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>

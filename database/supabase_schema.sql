@@ -55,6 +55,13 @@ create policy "Allow public increment download count"
   using (expires_at > now())
   with check (true);
 
+-- Policy D: Allow public removal of files (Manual or FIFO Auto-Purge when storage is full)
+drop policy if exists "Allow public delete files" on public.files;
+create policy "Allow public delete files"
+  on public.files
+  for delete
+  using (true);
+
 -- 3. Create public Storage Bucket for file uploads
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (

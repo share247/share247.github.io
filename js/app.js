@@ -135,13 +135,15 @@ function setupEventListeners() {
     }
   });
 
-  // Full-window Drag and Drop
+  // Full-window Drag and Drop (Reliable counter with file type verification)
   window.addEventListener('dragenter', (e) => {
     e.preventDefault();
-    dragCounter++;
-    if (dragCounter === 1) {
-      dragOverlay.classList.add('active');
-      dragOverlay.hidden = false;
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      dragCounter++;
+      if (dragCounter === 1) {
+        dragOverlay.classList.add('active');
+        dragOverlay.hidden = false;
+      }
     }
   });
 
@@ -155,7 +157,12 @@ function setupEventListeners() {
     }
   });
 
-  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
 
   window.addEventListener('drop', (e) => {
     e.preventDefault();
@@ -202,6 +209,13 @@ function setupEventListeners() {
 
   btnCopyShareUrl.addEventListener('click', () => {
     copyTextToClipboard(shareUrlInput.value, 'Direct link copied to clipboard!');
+    btnCopyShareUrl.classList.add('copied');
+    const labelSpan = btnCopyShareUrl.querySelector('.copy-label');
+    if (labelSpan) labelSpan.textContent = 'Copied! ✓';
+    setTimeout(() => {
+      btnCopyShareUrl.classList.remove('copied');
+      if (labelSpan) labelSpan.textContent = 'Copy Link';
+    }, 2000);
   });
 }
 
@@ -222,11 +236,62 @@ function toggleSort(column) {
 }
 
 // ==========================================
-// UPLOAD HANDLING
+// UPLOAD HANDLING & STORAGE CAPACITY MANAGEMENT (FIFO AUTO-PURGE)
 // ==========================================
 
-function promptUploadOptions(file) {
+const MAX_VAULT_BYTES = 1073741824; // 1 GB capacity allocation
+
+async function ensureStorageCapacity(newFileSize) {
+  if (newFileSize > MAX_VAULT_BYTES) {
+    throw new Error(`File size (${dbService.formatBytes(newFileSize)}) exceeds maximum 1 GB vault capacity.`);
+  }
+
+  // Refresh active files from DB for live usage check
+  try {
+    const liveFiles = await dbService.getActiveFiles();
+    if (liveFiles && Array.isArray(liveFiles)) {
+      activeFiles = liveFiles;
+    }
+  } catch (_) {}
+
+  const now = Date.now();
+  const validFiles = (activeFiles || []).filter(f => new Date(f.expiresAt).getTime() > now);
+  const currentTotal = validFiles.reduce((acc, f) => acc + (Number(f.size) || 0), 0);
+
+  if (currentTotal + newFileSize > MAX_VAULT_BYTES) {
+    const spaceNeeded = (currentTotal + newFileSize) - MAX_VAULT_BYTES;
+    console.info(`Share247: Vault full! Freeing ${dbService.formatBytes(spaceNeeded)} by purging oldest files...`);
+
+    // Sort ascending by createdAt (oldest uploaded files first - FIFO)
+    const oldestFirst = [...validFiles].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+    let freedBytes = 0;
+    const evictedFiles = [];
+
+    for (const oldFile of oldestFirst) {
+      if (freedBytes >= spaceNeeded) break;
+      try {
+        await dbService.deleteFile(oldFile.id, oldFile.storagePath);
+        freedBytes += Number(oldFile.size) || 0;
+        evictedFiles.push(oldFile);
+        activeFiles = activeFiles.filter(f => f.id !== oldFile.id);
+      } catch (err) {
+        console.error('Failed to auto-purge oldest file:', oldFile.id, err);
+      }
+    }
+
+    if (evictedFiles.length > 0) {
+      renderFilesTable();
+      updateFooterStorageTracker();
+      const names = evictedFiles.map(f => `"${f.name}"`).join(', ');
+      showToast(`Database space full: Automatically deleted older file(s) (${names}) to accommodate your current upload.`, 'info');
+    }
+  }
+}
+
+function promptUploadOptions(initialFile) {
   return new Promise((resolve) => {
+    let currentFile = initialFile;
     const uploadDialog = document.getElementById('upload-dialog');
     const uploadModalName = document.getElementById('upload-modal-name');
     const uploadModalMeta = document.getElementById('upload-modal-meta');
@@ -236,12 +301,18 @@ function promptUploadOptions(file) {
     const pinGroup = document.getElementById('pin-input-group');
     const pinInput = document.getElementById('upload-pin-code');
     const uploadForm = document.getElementById('upload-options-form');
+    const modalDropzone = document.getElementById('modal-dropzone');
+    const modalFilePicker = document.getElementById('modal-file-picker');
 
-    const { iconClass, label } = getFileTypeDetails(file.name);
-    uploadModalBadge.className = `file-badge ${iconClass}`;
-    uploadModalBadge.textContent = label;
-    uploadModalName.textContent = file.name;
-    uploadModalMeta.textContent = `${dbService.formatBytes(file.size)} • Auto-purges after 7 days`;
+    function updateModalCard(f) {
+      const { iconClass, label } = getFileTypeDetails(f.name);
+      uploadModalBadge.className = `file-badge ${iconClass}`;
+      uploadModalBadge.textContent = label;
+      uploadModalName.textContent = f.name;
+      uploadModalMeta.textContent = `${dbService.formatBytes(f.size)} • Auto-purges after 7 days`;
+    }
+
+    updateModalCard(currentFile);
 
     radioPublic.checked = true;
     radioPin.checked = false;
@@ -258,6 +329,34 @@ function promptUploadOptions(file) {
     radioPublic.onchange = handleRadioChange;
     radioPin.onchange = handleRadioChange;
 
+    // In-Modal Drag & Drop & Browse
+    if (modalDropzone && modalFilePicker) {
+      modalDropzone.onclick = () => modalFilePicker.click();
+      modalDropzone.ondragover = (e) => {
+        e.preventDefault();
+        modalDropzone.classList.add('dragover');
+      };
+      modalDropzone.ondragleave = () => {
+        modalDropzone.classList.remove('dragover');
+      };
+      modalDropzone.ondrop = (e) => {
+        e.preventDefault();
+        modalDropzone.classList.remove('dragover');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          currentFile = e.dataTransfer.files[0];
+          updateModalCard(currentFile);
+        }
+      };
+
+      modalFilePicker.onchange = () => {
+        if (modalFilePicker.files && modalFilePicker.files.length > 0) {
+          currentFile = modalFilePicker.files[0];
+          updateModalCard(currentFile);
+          modalFilePicker.value = '';
+        }
+      };
+    }
+
     const handleSubmit = (e) => {
       e.preventDefault();
       uploadForm.removeEventListener('submit', handleSubmit);
@@ -273,13 +372,13 @@ function promptUploadOptions(file) {
       }
 
       uploadDialog.close();
-      resolve({ proceed: true, pin });
+      resolve({ proceed: true, file: currentFile, pin });
     };
 
     const handleCancel = () => {
       uploadForm.removeEventListener('submit', handleSubmit);
       uploadDialog.removeEventListener('close', handleCancel);
-      resolve({ proceed: false, pin: null });
+      resolve({ proceed: false, file: null, pin: null });
     };
 
     uploadForm.addEventListener('submit', handleSubmit);
@@ -295,14 +394,22 @@ async function handleFiles(files) {
       showToast(`"${file.name}" exceeds 100 MB limit.`, 'error');
       continue;
     }
-    const { proceed, pin } = await promptUploadOptions(file);
-    if (proceed) {
-      await uploadSingleFile(file, pin);
+    const { proceed, file: chosenFile, pin } = await promptUploadOptions(file);
+    if (proceed && chosenFile) {
+      await uploadSingleFile(chosenFile, pin);
     }
   }
 }
 
 async function uploadSingleFile(file, pin = null) {
+  // 1. Ensure storage capacity (FIFO Auto-Purge oldest files if database becomes full)
+  try {
+    await ensureStorageCapacity(file.size);
+  } catch (capErr) {
+    showToast(capErr.message || 'Vault capacity exceeded', 'error');
+    return;
+  }
+
   uploadWidget.hidden = false;
   uploadWidgetTitle.textContent = 'Uploading File';
   widgetFileName.textContent = file.name;
@@ -474,6 +581,9 @@ function renderFilesTable() {
           <button class="row-action-btn btn-download" data-id="${file.id}" type="button" title="Download" aria-label="Download">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           </button>
+          <button class="row-action-btn btn-delete" data-id="${file.id}" type="button" title="Delete file from vault" aria-label="Delete">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
           <button class="row-action-btn btn-details" data-id="${file.id}" type="button" title="More options" aria-label="More options">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
           </button>
@@ -491,6 +601,14 @@ function renderFilesTable() {
       e.stopPropagation();
       openShareDialog(file);
     });
+
+    const btnDelete = tr.querySelector('.btn-delete');
+    if (btnDelete) {
+      btnDelete.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleDeleteFile(file);
+      });
+    }
 
     tr.querySelector('.btn-details').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -637,6 +755,13 @@ function openPinModal(file, onUnlocked) {
       if (onUnlocked) onUnlocked();
     } else {
       errorFeedback.hidden = false;
+      const box = pinDialog.querySelector('.dialog-box');
+      if (box) {
+        box.classList.remove('shake');
+        void box.offsetWidth;
+        box.classList.add('shake');
+        setTimeout(() => box.classList.remove('shake'), 400);
+      }
       pinInput.select();
       pinInput.focus();
     }
@@ -667,6 +792,26 @@ async function triggerDownload(file) {
   }
 }
 
+async function handleDeleteFile(file) {
+  const confirmed = window.confirm(`Are you sure you want to permanently delete "${file.name}" from the vault?`);
+  if (!confirmed) return;
+
+  try {
+    await dbService.deleteFile(file.id, file.storagePath);
+    activeFiles = activeFiles.filter(f => f.id !== file.id);
+    renderFilesTable();
+    updateFooterStorageTracker();
+    showToast(`Deleted "${file.name}" from public vault.`, 'success');
+    const shareDialog = document.getElementById('share-dialog');
+    if (shareDialog && shareDialog.open) {
+      shareDialog.close();
+    }
+  } catch (err) {
+    console.error('Delete error:', err);
+    showToast(`Could not delete file: ${err.message || err}`, 'error');
+  }
+}
+
 function openShareDialog(file) {
   const { iconClass, label } = getFileTypeDetails(file.name);
   const { countdownText } = getCountdownBadgeInfo(file.expiresAt);
@@ -679,6 +824,14 @@ function openShareDialog(file) {
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?file=${encodeURIComponent(file.id)}`;
   shareUrlInput.value = shareUrl;
+
+  const btnModalDelete = document.getElementById('btn-modal-delete');
+  if (btnModalDelete) {
+    btnModalDelete.onclick = (e) => {
+      e.preventDefault();
+      handleDeleteFile(file);
+    };
+  }
 
   btnModalDownload.href = '#';
   btnModalDownload.removeAttribute('download');
