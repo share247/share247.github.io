@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Share247 — Public Cloud Vault</title>
+  <meta name="description" content="Public ephemeral file sharing powered by Supabase. Files auto-delete after 7 days.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📁</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="dark-theme">
+
+  <!-- Top Navigation Bar (No sidebar, no footer) -->
+  <header class="navbar">
+    <div class="nav-left">
+      <div class="brand-item">
+        <!-- Original Cloud Vault Icon -->
+        <svg class="brand-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+        </svg>
+        <span class="brand-name">Share247</span>
+      </div>
+    </div>
+
+    <!-- Center Search Bar -->
+    <div class="nav-center">
+      <search class="search-box">
+        <form id="search-form" onsubmit="return false;">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="search" id="search-input" placeholder="Search files in public vault..." autocomplete="off">
+          <button type="button" id="search-clear" class="btn-clear-search" hidden aria-label="Clear search">&times;</button>
+        </form>
+      </search>
+    </div>
+
+    <!-- Right Controls: Upload Button, Status, Settings -->
+    <div class="nav-right">
+      <!-- Prominent Navbar Upload Button -->
+      <button id="btn-navbar-upload" class="btn-upload" type="button" aria-label="Upload file to public vault">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>Upload</span>
+      </button>
+      <input type="file" id="file-input" hidden multiple>
+
+      <!-- Supabase / Local status pill -->
+      <div id="status-badge" class="nav-status-pill status-local" title="Database status">
+        <span class="status-dot"></span>
+        <span id="status-text">Local</span>
+      </div>
+
+      <!-- Settings button -->
+      <button id="btn-open-settings" class="nav-icon-btn" type="button" title="Configure Supabase Database" aria-label="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Viewport Table (Full Viewport, No Footer, No Sidebar) -->
+  <main class="vault-main">
+    
+    <!-- Table Subheader -->
+    <div class="vault-subnav">
+      <div class="subnav-left">
+        <h1 class="view-title">Public Files</h1>
+        <span class="view-subtitle">&bull; Auto-purged after 7 days</span>
+      </div>
+      <div class="subnav-right">
+        <span id="files-counter" class="item-count">0 items</span>
+        <button id="btn-refresh" class="subnav-btn" type="button" title="Refresh files list" aria-label="Refresh">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- File List Table -->
+    <div class="table-container" tabindex="0" role="region" aria-labelledby="vault-table-caption">
+      <table class="vault-table">
+        <caption id="vault-table-caption" class="sr-only">Public shared files list</caption>
+        <thead>
+          <tr>
+            <th class="th-name" scope="col" id="col-sort-name" role="button" tabindex="0">
+              <span class="th-content">
+                Name
+                <svg id="name-sort-arrow" class="sort-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <line x1="12" y1="19" x2="12" y2="5"></line>
+                  <polyline points="5 12 12 5 19 12"></polyline>
+                </svg>
+              </span>
+            </th>
+            <th class="th-owner" scope="col">Owner</th>
+            <th class="th-date" scope="col" id="col-sort-date" role="button" tabindex="0">
+              <span class="th-content">Date modified</span>
+            </th>
+            <th class="th-expires" scope="col">Expires in</th>
+            <th class="th-size" scope="col" id="col-sort-size" role="button" tabindex="0">
+              <span class="th-content">File size</span>
+            </th>
+            <th class="th-actions" scope="col">
+              <div class="th-sort-menu-btn" title="Sort options">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="6" y1="12" x2="18" y2="12"></line>
+                  <line x1="9" y1="18" x2="15" y2="18"></line>
+                </svg>
+                <span>Sort</span>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="files-tbody">
+          <!-- Dynamically populated rows -->
+        </tbody>
+      </table>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="vault-empty-state" hidden>
+        <div class="empty-icon" aria-hidden="true">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#52525b" stroke-width="1.5">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <h2>No files in the vault</h2>
+        <p>Click <strong>+ Upload</strong> in the navbar or drop files anywhere onto this window.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Fullscreen Drag & Drop Overlay -->
+  <div id="drag-overlay" class="drag-overlay" hidden>
+    <div class="drag-box">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      <h3>Drop files to upload</h3>
+      <p>Files will be publicly available and auto-delete in 7 days</p>
+    </div>
+  </div>
+
+  <!-- Bottom-Right Upload Widget -->
+  <aside id="upload-widget" class="upload-widget" hidden aria-label="Upload status">
+    <div class="upload-widget-header">
+      <span id="upload-widget-title">Uploading 1 item</span>
+      <button id="btn-close-upload-widget" class="widget-close-btn" type="button" aria-label="Dismiss">&times;</button>
+    </div>
+    <div class="upload-widget-body">
+      <div class="widget-file-row">
+        <div id="widget-file-icon" class="widget-badge">DOC</div>
+        <div class="widget-file-info">
+          <span id="widget-file-name" class="widget-filename">filename.ext</span>
+          <span id="widget-file-percent" class="widget-percent">0%</span>
+        </div>
+      </div>
+      <progress id="upload-progress-bar" value="0" max="100" aria-label="Upload progress"></progress>
+    </div>
+  </aside>
+
+  <!-- Direct File Share & Download Dialog -->
+  <dialog id="share-dialog" aria-labelledby="share-dialog-title">
+    <div class="dialog-box">
+      <div class="dialog-header">
+        <h3 id="share-dialog-title">File Details</h3>
+        <button type="button" class="btn-dialog-close" aria-label="Close dialog">&times;</button>
+      </div>
+      
+      <div class="dialog-file-card">
+        <div id="share-modal-icon-badge" class="file-badge">DOC</div>
+        <div class="dialog-file-meta">
+          <h4 id="share-modal-name">filename.ext</h4>
+          <p><span id="share-modal-size">0 B</span> &bull; <span id="share-modal-expires">Expires in 7 days</span></p>
+        </div>
+      </div>
+
+      <div class="dialog-field">
+        <label for="share-url-input">Direct Shareable Link</label>
+        <div class="input-with-button">
+          <input type="text" id="share-url-input" readonly>
+          <button id="btn-copy-share-url" class="btn-action-primary" type="button">Copy Link</button>
+        </div>
+        <p class="dialog-hint">Anyone with this link can download this file directly.</p>
+      </div>
+
+      <div class="dialog-actions">
+        <form method="dialog">
+          <button class="btn-action-secondary" value="close">Close</button>
+        </form>
+        <a id="btn-modal-download" href="#" class="btn-action-primary" download>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download
+        </a>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Supabase Settings Modal Dialog -->
+  <dialog id="settings-dialog" aria-labelledby="settings-dialog-title">
+    <div class="dialog-box">
+      <div class="dialog-header">
+        <h3 id="settings-dialog-title">Supabase Database Settings</h3>
+        <button type="button" class="btn-dialog-close" aria-label="Close dialog">&times;</button>
+      </div>
+
+      <p class="dialog-desc">
+        Connect Share247 to your live <strong>Supabase</strong> project. Once connected, your files are stored in Supabase Storage and PostgreSQL with 7-day auto-purge.
+      </p>
+
+      <form id="supabase-config-form">
+        <div class="dialog-field">
+          <label for="cfg-supabaseUrl">Supabase Project URL</label>
+          <input type="url" id="cfg-supabaseUrl" placeholder="https://your-project-id.supabase.co" required autocomplete="off">
+        </div>
+        <div class="dialog-field">
+          <label for="cfg-supabaseAnonKey">Supabase Public Anon Key</label>
+          <input type="text" id="cfg-supabaseAnonKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." required autocomplete="off">
+          <p class="dialog-hint">Found in Supabase Dashboard &gt; Project Settings &gt; API</p>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" id="btn-reset-config" class="btn-action-secondary">Reset to Local</button>
+          <button type="submit" class="btn-action-primary">Save &amp; Connect</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Floating Toast Notifications -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Screen Reader Live Announcer -->
+  <div id="live-announcer" role="status" aria-live="polite" class="sr-only"></div>
+
+  <!-- App Bootstrap -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

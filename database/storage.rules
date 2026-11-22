@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /uploads/{fileId}/{fileName} {
+      // Allow public read and download of any file
+      allow read: if true;
+
+      // Allow public upload up to 100MB
+      // Ephemeral lifecycle automatically removes files after 7 days
+      allow write: if request.resource.size > 0 
+                   && request.resource.size <= 104857600 // 100 MB limit
+                   && fileName.size() > 0 
+                   && fileName.size() <= 255;
+      
+      // Deletions managed by GCS Object Lifecycle Management
+      allow delete: if false;
+    }
+  }
+}
