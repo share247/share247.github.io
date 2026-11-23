@@ -114,6 +114,17 @@ class DatabaseService {
     const rawType = r.type || '';
     const hasPinInType = rawType.includes('; pin=');
     const pinVal = r.pin || (hasPinInType ? decodeURIComponent(rawType.split('; pin=')[1]) : null);
+
+    const hasModInType = rawType.includes('; mod=');
+    let modStatus = r.moderation_status || 'safe';
+    let modReason = r.moderation_reason || '';
+    if (hasModInType) {
+      const match = rawType.match(/; mod=([^;]+)/);
+      if (match) modStatus = match[1];
+      const rMatch = rawType.match(/; reason=([^;]+)/);
+      if (rMatch) modReason = decodeURIComponent(rMatch[1]);
+    }
+
     const cleanType = rawType.split(';')[0];
     const isLink = cleanType === 'url' || cleanType === 'text/x-uri' || r.extension === 'link' || (r.storage_path && r.storage_path.startsWith('link://'));
     const displayName = isLink ? (this.extractDomain(r.name || r.download_url) || r.name) : r.name;
@@ -133,8 +144,8 @@ class DatabaseService {
       downloadsCount: r.downloads_count,
       hasPin: Boolean(pinVal),
       pin: pinVal,
-      moderationStatus: r.moderation_status || 'safe',
-      moderationReason: r.moderation_reason || '',
+      moderationStatus: modStatus,
+      moderationReason: modReason,
       flaggedAt: r.flagged_at || null
     };
   }
@@ -710,7 +721,20 @@ class DatabaseService {
           .select()
           .single();
         if (error) {
-          console.warn('Could not update moderation status on Supabase:', error.message || error);
+          // Fallback if column does not exist in schema cache: persist status in the 'type' column
+          try {
+            const { data: cur } = await this.supabase.from('files').select('type').eq('id', fileId).single();
+            if (cur) {
+              let newType = (cur.type || '').replace(/; mod=[^;]*/g, '').replace(/; reason=[^;]*/g, '');
+              if (status === 'flagged') {
+                newType += `; mod=flagged; reason=${encodeURIComponent(reason)}`;
+              } else {
+                newType += `; mod=safe`;
+              }
+              const { data: updated } = await this.supabase.from('files').update({ type: newType }).eq('id', fileId).select().single();
+              return updated ? this.mapSupabaseRecord(updated) : null;
+            }
+          } catch (_) {}
         }
         return data ? this.mapSupabaseRecord(data) : null;
       } catch (err) {

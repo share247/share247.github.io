@@ -29,8 +29,11 @@ const DEFAULT_GEMINI_API_KEY = (typeof atob !== 'undefined')
   : (typeof Buffer !== 'undefined' ? Buffer.from('QVEuQWI4Uk42THV1ckxDSEpOWFJNRDNXRUNpYXFjUXliTDNUU0JOdk1fZlFxX2ZCOWV2OHc=', 'base64').toString('utf-8') : '');
 
 // Primary and fallback models for Google Generative AI
-// gemini-3.5-flash is prioritized to avoid 503 High Demand rate-limits on experimental endpoints
+// gemini-flash-lite-latest and gemini-3.5-flash-lite provide high vision capacity and rapid multimodal response
 const GEMINI_MODELS = [
+  'gemini-flash-lite-latest',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
   'gemini-3.5-flash',
   'gemini-flash-latest',
   'gemini-3.8-flash'
@@ -316,26 +319,27 @@ class ModerationService {
       return this.runHeuristicScan(item);
     }
 
-    const systemPrompt = `You are an automated, strictly impartial trust and safety AI moderator for a public file storage service (Share247).
-Your task is to inspect the attached content and any image or document sample for safety and policy compliance.
+    const systemPrompt = `You are an automated, strictly impartial trust and safety AI moderator for Share247 public cloud storage.
+Your sole job is to inspect the attached content, metadata, and visual image sample for content policy violations.
 
-STRICT CONTENT SAFETY CRITERIA:
-1. Pornography & Sexually Explicit Content (CRITICAL):
-   - Any exposed human genitalia, female breasts, buttocks, or explicit nudity.
-   - Any sexual intercourse, oral sex, masturbation, or sexually explicit poses.
-   - Adult toys, hentai/erotic anime, or NSFW adult imagery.
-2. Sexual Abuse & Exploitation (ZERO TOLERANCE):
-   - Any non-consensual sexual content, sexual violence, or child exploitation/CSAM.
-3. Violence, Weapons, & Terrorism:
-   - Graphic gore, bodily mutilation, suicide, bomb-making, terrorist propaganda.
-4. Malicious Content & Contraband:
-   - Malware, credential stealers, counterfeit goods, illegal drug distribution, cyber exploits.
+SAFETY QUESTION:
+Is this item SAFE and PERMITTED for general-audience public sharing without adult/prohibited restrictions?
 
-DECISION PROTOCOL:
-- If the image or content contains ANY prohibited or sensitive material from the criteria above, you MUST answer:
-  decision: "NO" and safe: false
-- If the image or content is completely safe (innocent photo, document, textbook, software code, graphic diagram, general website), answer:
-  decision: "YES" and safe: true
+DECISION RULES:
+- If the item contains ANY:
+  * Pornography, exposed human genitalia, female breasts, nipples, buttocks, or explicit nudity
+  * Sexual intercourse, oral sex, masturbation, or sexually explicit/erotic poses
+  * Sexual abuse, violence, gore, weapons, contraband, or illegal malware
+  YOU MUST SET:
+  "decision": "NO",
+  "safe": false,
+  "category": "pornography" (or matching violation)
+
+- ONLY if the item is 100% clean, non-adult, and completely safe for public sharing (e.g. document, software code, landscape, diagram):
+  SET:
+  "decision": "YES",
+  "safe": true,
+  "category": "safe"
 
 Output ONLY a valid JSON object matching this schema:
 {
@@ -398,7 +402,7 @@ Output ONLY a valid JSON object matching this schema:
         const candidate = json.candidates?.[0];
         const blockReason = json.promptFeedback?.blockReason || candidate?.finishReason;
 
-        // If core Google safety filters blocked the response, it is guaranteed to be sensitive
+        // 1. If core Google safety filters blocked the response, it is guaranteed to be sensitive
         if (blockReason === 'SAFETY' || blockReason === 'BLOCKLIST' || blockReason === 'PROHIBITED_CONTENT') {
           return {
             safe: false,
@@ -409,18 +413,44 @@ Output ONLY a valid JSON object matching this schema:
           };
         }
 
+        // 2. Check candidate safetyRatings
+        const safetyRatings = candidate?.safetyRatings || json.promptFeedback?.safetyRatings || [];
+        const flaggedByRating = safetyRatings.some(r =>
+          (r.category === 'HARM_CATEGORY_SEXUALLY_EXPLICIT' && ['HIGH', 'MEDIUM'].includes(r.probability)) ||
+          (r.category === 'HARM_CATEGORY_DANGEROUS_CONTENT' && r.probability === 'HIGH')
+        );
+        if (flaggedByRating) {
+          return {
+            safe: false,
+            decision: 'NO',
+            category: 'pornography',
+            reason: 'Sexually explicit material detected by AI safety classifiers',
+            confidence: 'high'
+          };
+        }
+
         const rawText = candidate?.content?.parts?.[0]?.text || '';
         const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
 
         if (cleanJson) {
           const parsed = JSON.parse(cleanJson);
-          const isDecisionYes = String(parsed.decision).toUpperCase() === 'YES';
+          const categoryStr = String(parsed.category || '').toLowerCase();
+          const reasonStr = String(parsed.reason || '').toLowerCase();
+          const decisionStr = String(parsed.decision || '').trim().toUpperCase();
+
+          const isUnsafeCategory = ['pornography', 'sexual_abuse', 'illegal', 'violence', 'malware', 'phishing', 'adult', 'nsfw'].includes(categoryStr);
+          const reasonMentionsNudity = /porn|nude|nudity|naked|genital|penis|vagina|vulva|breast|nipple|erotic|intercourse|nsfw|explicit|abuse|prohibited/i.test(reasonStr);
+          const isSafeFalse = parsed.safe === false || parsed.safe === 'false' || parsed.safe === 0;
+          const isDecisionNo = decisionStr === 'NO';
+
+          // Any positive detection of pornography or sensitive content strictly forces NO
+          const isUnsafe = isDecisionNo || isSafeFalse || isUnsafeCategory || reasonMentionsNudity;
 
           return {
-            safe: isDecisionYes && Boolean(parsed.safe),
-            decision: isDecisionYes ? 'YES' : 'NO',
-            category: parsed.category || (isDecisionYes ? 'safe' : 'other'),
-            reason: parsed.reason || (isDecisionYes ? 'Safe for sharing' : 'Sensitive material detected by Gemini AI'),
+            safe: !isUnsafe,
+            decision: isUnsafe ? 'NO' : 'YES',
+            category: isUnsafe ? (isUnsafeCategory ? parsed.category : 'pornography') : 'safe',
+            reason: parsed.reason || (isUnsafe ? 'Explicit adult content or policy violation detected' : 'Safe for sharing'),
             confidence: parsed.confidence || 'high'
           };
         }
