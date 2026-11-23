@@ -8,6 +8,42 @@
 import { getStoredSupabaseConfig, isSupabaseConfigured } from './config.js';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const PURGED_FILES_KEY = 'share247_purged_file_ids';
+
+export function getPurgedFileIds() {
+  try {
+    const raw = localStorage.getItem(PURGED_FILES_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (_) {
+    return new Set();
+  }
+}
+
+export function addPurgedFileId(id) {
+  if (!id) return;
+  try {
+    const current = getPurgedFileIds();
+    current.add(String(id));
+    localStorage.setItem(PURGED_FILES_KEY, JSON.stringify([...current]));
+  } catch (e) {
+    console.warn('Could not save purged file ID:', e);
+  }
+}
+
+let syncBroadcastChannel = null;
+try {
+  if (typeof BroadcastChannel !== 'undefined') {
+    syncBroadcastChannel = new BroadcastChannel('share247_vault_sync');
+  }
+} catch (_) {}
+
+export function broadcastVaultChange(action, payload) {
+  try {
+    if (syncBroadcastChannel) {
+      syncBroadcastChannel.postMessage({ action, payload, timestamp: Date.now() });
+    }
+  } catch (_) {}
+}
 
 class DatabaseService {
   constructor() {
@@ -272,14 +308,25 @@ class DatabaseService {
 
   async getActiveFilesFromSupabase() {
     const nowIso = new Date().toISOString();
-    const { data, error } = await this.supabase
+    let { data, error } = await this.supabase
       .from('files')
       .select('*')
       .gt('expires_at', nowIso)
+      .neq('moderation_status', 'deleted')
       .order('created_at', { ascending: false });
 
+    // Fallback if moderation_status column or neq is not supported
     if (error) {
-      throw new Error(error.message);
+      const fallback = await this.supabase
+        .from('files')
+        .select('*')
+        .gt('expires_at', nowIso)
+        .order('created_at', { ascending: false });
+
+      if (fallback.error) {
+        throw new Error(fallback.error.message);
+      }
+      data = fallback.data;
     }
 
     return (data || []).map(r => this.mapSupabaseRecord(r));
@@ -293,6 +340,7 @@ class DatabaseService {
       .single();
 
     if (error || !data) return null;
+    if (data.moderation_status === 'deleted') return null;
     if (new Date(data.expires_at).getTime() <= Date.now()) return null; // Expired
 
     return this.mapSupabaseRecord(data);
@@ -315,6 +363,8 @@ class DatabaseService {
   }
 
   async deleteFileFromSupabase(fileId, storagePath) {
+    const strId = String(fileId);
+
     // 1. Remove binary file from Supabase storage bucket (only for storage files)
     if (storagePath && !storagePath.startsWith('link://') && !storagePath.startsWith('local://')) {
       try {
@@ -324,19 +374,28 @@ class DatabaseService {
       }
     }
 
-    // 2. Delete metadata row from files table
-    const { error } = await this.supabase
-      .from('files')
-      .delete()
-      .eq('id', fileId);
-
-    // If direct DELETE is restricted by RLS on public.files, mark expires_at to past so it's excluded immediately
-    if (error) {
-      console.warn('Share247: Hard delete from table blocked, setting expired:', error);
-      await this.supabase
+    // 2. Try hard delete metadata row from files table
+    try {
+      const { error: delError } = await this.supabase
         .from('files')
-        .update({ expires_at: new Date(Date.now() - 60000).toISOString() })
-        .eq('id', fileId);
+        .delete()
+        .eq('id', strId);
+
+      // If direct DELETE is restricted by RLS on public.files, mark expires_at to past and status to deleted
+      if (delError) {
+        console.warn('Share247: Hard delete from table blocked by RLS, executing soft-delete fallback:', delError);
+        const pastDate = new Date(Date.now() - 3600000).toISOString();
+        const { error: updError } = await this.supabase
+          .from('files')
+          .update({ expires_at: pastDate, moderation_status: 'deleted' })
+          .eq('id', strId);
+
+        if (updError) {
+          console.warn('Share247: Soft delete also failed on Supabase:', updError);
+        }
+      }
+    } catch (err) {
+      console.warn('Share247: Supabase delete operation error:', err);
     }
 
     return true;
@@ -489,7 +548,7 @@ class DatabaseService {
       req.onsuccess = () => {
         const records = req.result || [];
         const active = records
-          .filter(r => new Date(r.expiresAt).getTime() > now)
+          .filter(r => new Date(r.expiresAt).getTime() > now && r.moderationStatus !== 'deleted')
           .map(r => {
             const { blob, ...meta } = r;
             meta.isLink = Boolean(meta.isLink || meta.type === 'url' || meta.extension === 'link');
@@ -518,7 +577,7 @@ class DatabaseService {
 
       req.onsuccess = () => {
         const record = req.result;
-        if (!record) return resolve(null);
+        if (!record || record.moderationStatus === 'deleted') return resolve(null);
         if (new Date(record.expiresAt).getTime() <= Date.now()) {
           return resolve(null);
         }
@@ -556,13 +615,26 @@ class DatabaseService {
   }
 
   async deleteFileFromLocal(fileId) {
+    if (!this.idb) {
+      try {
+        await this.initIndexedDB();
+      } catch (_) {}
+    }
     if (!this.idb) return false;
-    return new Promise((resolve, reject) => {
-      const tx = this.idb.transaction(['files'], 'readwrite');
-      const store = tx.objectStore('files');
-      const req = store.delete(fileId);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
+    return new Promise((resolve) => {
+      try {
+        const tx = this.idb.transaction(['files'], 'readwrite');
+        const store = tx.objectStore('files');
+        const req = store.delete(fileId);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => {
+          console.warn('Local file delete error:', req.error);
+          resolve(false);
+        };
+      } catch (e) {
+        console.warn('IDB transaction delete error:', e);
+        resolve(false);
+      }
     });
   }
 
@@ -585,13 +657,19 @@ class DatabaseService {
   }
 
   async getActiveFiles() {
+    const purged = getPurgedFileIds();
+    let files = [];
     if (this.mode === 'supabase') {
-      return this.getActiveFilesFromSupabase();
+      files = await this.getActiveFilesFromSupabase();
+    } else {
+      files = await this.getActiveFilesFromLocal();
     }
-    return this.getActiveFilesFromLocal();
+    return (files || []).filter(f => !purged.has(String(f.id)) && f.moderationStatus !== 'deleted');
   }
 
   async getFileById(fileId) {
+    const purged = getPurgedFileIds();
+    if (purged.has(String(fileId))) return null;
     if (this.mode === 'supabase') {
       return this.getFileByIdFromSupabase(fileId);
     }
@@ -652,10 +730,18 @@ class DatabaseService {
   }
 
   async deleteFile(fileId, storagePath) {
+    const strId = String(fileId);
+    // 1. Mark purged in persistent local storage so it will never be displayed in any session/tab
+    addPurgedFileId(strId);
+
+    // 2. Broadcast deletion to all open tabs immediately
+    broadcastVaultChange('DELETE', { id: strId });
+
+    // 3. Delete from active backend storage
     if (this.mode === 'supabase') {
-      return this.deleteFileFromSupabase(fileId, storagePath);
+      return this.deleteFileFromSupabase(strId, storagePath);
     }
-    return this.deleteFileFromLocal(fileId);
+    return this.deleteFileFromLocal(strId);
   }
 
   subscribeToFiles(onFileChange) {

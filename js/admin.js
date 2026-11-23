@@ -436,7 +436,7 @@ async function handleDeleteSingleItem(file) {
 
   try {
     await dbService.deleteFile(file.id, file.storagePath);
-    allVaultFiles = allVaultFiles.filter(f => f.id !== file.id);
+    allVaultFiles = allVaultFiles.filter(f => String(f.id) !== String(file.id));
     updateMetrics();
     renderVaultTable();
     showAdminToast(`Deleted "${file.name}" from vault.`, 'success');
@@ -459,7 +459,7 @@ async function handleDeleteAllFlagged() {
   for (const file of flagged) {
     try {
       await dbService.deleteFile(file.id, file.storagePath);
-      allVaultFiles = allVaultFiles.filter(f => f.id !== file.id);
+      allVaultFiles = allVaultFiles.filter(f => String(f.id) !== String(file.id));
       deletedCount++;
     } catch (e) {
       console.warn(`Could not delete flagged file ${file.id}:`, e);

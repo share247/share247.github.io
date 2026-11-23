@@ -46,7 +46,7 @@ drop policy if exists "Allow public view active files" on public.files;
 create policy "Allow public view active files"
   on public.files
   for select
-  using (expires_at > now());
+  using (expires_at > now() and moderation_status != 'deleted');
 
 -- Policy B: Anyone can insert files (Public upload)
 drop policy if exists "Allow public insert files" on public.files;

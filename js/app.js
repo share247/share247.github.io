@@ -4,7 +4,7 @@
  * sorting, live 7-day countdown, and Supabase / Local storage switching.
  */
 
-import { dbService } from './db.js?v=20261123-final';
+import { dbService, getPurgedFileIds } from './db.js?v=20261123-final';
 import { moderationService } from './moderation.js?v=20261123-final';
 
 // DOM Elements
@@ -100,7 +100,41 @@ async function initApp() {
       }
     });
 
-    // Background sync polling every 8s as fallback
+    // Real-time Cross-Tab Broadcast Channel (instant updates from Admin or other tabs)
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const syncChannel = new BroadcastChannel('share247_vault_sync');
+        syncChannel.addEventListener('message', (e) => {
+          if (e.data && e.data.action === 'DELETE' && e.data.payload && e.data.payload.id) {
+            const delId = String(e.data.payload.id);
+            activeFiles = activeFiles.filter(f => String(f.id) !== delId);
+            renderFilesTable();
+            updateFooterStorageTracker();
+          } else if (e.data && (e.data.action === 'INSERT' || e.data.action === 'REFRESH')) {
+            refreshFilesList(false);
+          }
+        });
+      }
+    } catch (_) {}
+
+    // Cross-tab storage event synchronization
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'share247_purged_file_ids') {
+        refreshFilesList(false);
+      }
+    });
+
+    // Auto-refresh when tab gains focus or user returns to tab
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshFilesList(false);
+      }
+    });
+    window.addEventListener('focus', () => {
+      refreshFilesList(false);
+    });
+
+    // Background sync polling every 6s as fallback
     setInterval(async () => {
       try {
         const latest = await dbService.getActiveFiles();
@@ -109,7 +143,7 @@ async function initApp() {
           renderFilesTable();
         }
       } catch (_) {}
-    }, 8000);
+    }, 6000);
 
   } catch (err) {
     showLoader(false);
@@ -783,9 +817,12 @@ async function refreshFilesList(showSpinner = true) {
 function renderFilesTable() {
   const query = searchInput.value.trim().toLowerCase();
   const now = Date.now();
+  const purged = getPurgedFileIds();
 
-  // Filter unexpired files matching search query
+  // Filter unexpired files matching search query, excluding any purged or deleted files
   let filtered = activeFiles.filter((f) => {
+    if (purged.has(String(f.id))) return false;
+    if (f.moderationStatus === 'deleted') return false;
     const exp = new Date(f.expiresAt).getTime();
     if (exp <= now) return false;
 
