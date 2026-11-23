@@ -379,6 +379,7 @@ button {
 
 .vault-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.875rem;
@@ -406,6 +407,10 @@ button {
   cursor: pointer;
 }
 
+.th-expires .th-content {
+  cursor: default;
+}
+
 .sort-arrow {
   color: var(--accent-cyan);
   transition: transform 0.2s ease, opacity 0.2s ease;
@@ -427,33 +432,44 @@ button {
   transform: rotate(180deg);
 }
 
-.th-sort-menu-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0.25rem 0.65rem;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.15s ease;
+/* Explicit Rigid Column Allocations (Applied to both th and td) */
+.th-name, .cell-name {
+  width: 44%;
+  max-width: 44%;
+  overflow: hidden;
+  text-align: left;
 }
 
-.th-sort-menu-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.15);
+.th-date, .cell-date {
+  width: 22%;
+  max-width: 22%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }
 
-/* Column Width Allocations */
-.th-name { width: 50%; }
-.th-date { width: 22%; }
-.th-expires { width: 14%; }
-.th-size { width: 8%; }
-.th-actions { width: 6%; text-align: right; }
+.th-expires, .cell-expires {
+  width: 14%;
+  max-width: 14%;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.th-size, .cell-size {
+  width: 10%;
+  max-width: 10%;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.th-actions, .cell-actions {
+  width: 10%;
+  min-width: 110px;
+  max-width: 10%;
+  text-align: right;
+  white-space: nowrap;
+}
 
 /* Table Rows */
 .vault-table tbody tr {
@@ -549,32 +565,6 @@ button {
   padding: 0.12rem 0.5rem;
   border-radius: var(--radius-pill);
   line-height: 1.2;
-}
-
-/* Owner Column */
-.cell-owner-content {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.owner-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: #27272a;
-  color: #e4e4e7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
-.owner-name {
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
 }
 
 /* Date & Size Columns */
@@ -1554,9 +1544,6 @@ dialog::backdrop {
   .nav-center {
     max-width: none;
   }
-  .th-owner, .cell-owner {
-    display: none;
-  }
   .th-expires, .cell-expires {
     display: none;
   }
@@ -1564,10 +1551,10 @@ dialog::backdrop {
     width: 48%;
   }
   .th-date, .cell-date {
-    width: 24%;
+    width: 26%;
   }
   .th-size, .cell-size {
-    width: 14%;
+    width: 12%;
   }
   .th-actions, .cell-actions {
     width: 14%;

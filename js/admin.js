@@ -4,14 +4,28 @@
  * file management, and instant purge controls for prohibited material.
  */
 
-import { dbService } from './db.js';
-import { moderationService } from './moderation.js';
+import { dbService } from './db.js?v=20261123-final';
+import { moderationService } from './moderation.js?v=20261123-final';
 
 // DOM Elements
 const authOverlay = document.getElementById('auth-overlay');
 const authForm = document.getElementById('auth-form');
 const authPasscodeInput = document.getElementById('auth-passcode');
 const authError = document.getElementById('auth-error');
+
+function hideAuthOverlay() {
+  if (authOverlay) {
+    authOverlay.hidden = true;
+    authOverlay.style.display = 'none';
+  }
+}
+
+function showAuthOverlay() {
+  if (authOverlay) {
+    authOverlay.hidden = false;
+    authOverlay.style.display = 'flex';
+  }
+}
 
 const metricTotalItems = document.getElementById('metric-total-items');
 const metricFlaggedItems = document.getElementById('metric-flagged-items');
@@ -60,10 +74,10 @@ async function initAdminApp() {
 
   const isAuth = sessionStorage.getItem('share247_admin_auth') === 'true';
   if (isAuth) {
-    authOverlay.hidden = true;
+    hideAuthOverlay();
     await loadVaultData();
   } else {
-    authOverlay.hidden = false;
+    showAuthOverlay();
     setTimeout(() => authPasscodeInput.focus(), 100);
   }
 }
@@ -75,11 +89,17 @@ function setupEventListeners() {
     const candidate = authPasscodeInput.value.trim();
     if (moderationService.verifyPasscode(candidate)) {
       sessionStorage.setItem('share247_admin_auth', 'true');
-      authOverlay.hidden = true;
-      authError.hidden = true;
+      hideAuthOverlay();
+      if (authError) {
+        authError.hidden = true;
+        authError.style.display = 'none';
+      }
       loadVaultData();
     } else {
-      authError.hidden = false;
+      if (authError) {
+        authError.hidden = false;
+        authError.style.display = 'block';
+      }
       authPasscodeInput.select();
       authPasscodeInput.focus();
     }
@@ -88,9 +108,12 @@ function setupEventListeners() {
   // Logout
   btnLogout.addEventListener('click', () => {
     sessionStorage.removeItem('share247_admin_auth');
-    authOverlay.hidden = false;
+    showAuthOverlay();
     authPasscodeInput.value = '';
-    authError.hidden = true;
+    if (authError) {
+      authError.hidden = true;
+      authError.style.display = 'none';
+    }
   });
 
   // Refresh

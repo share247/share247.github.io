@@ -4,8 +4,8 @@
  * sorting, live 7-day countdown, and Supabase / Local storage switching.
  */
 
-import { dbService } from './db.js';
-import { moderationService } from './moderation.js';
+import { dbService } from './db.js?v=20261123-final';
+import { moderationService } from './moderation.js?v=20261123-final';
 
 // DOM Elements
 const btnNavbarUpload = document.getElementById('btn-navbar-upload');

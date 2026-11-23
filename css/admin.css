@@ -25,6 +25,10 @@
   padding: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   background-color: var(--admin-bg);
   color: var(--admin-text);
@@ -45,6 +49,14 @@ body {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
+}
+
+.auth-overlay[hidden] {
+  display: none !important;
+}
+
+.auth-error[hidden] {
+  display: none !important;
 }
 
 .auth-card {

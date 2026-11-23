@@ -6,7 +6,7 @@
   <title>Share247 — Admin Content Safety & Moderation Console</title>
   <meta name="description" content="Share247 Admin Console for automated AI content moderation, policy enforcement, and vault management.">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
-  <link rel="stylesheet" href="../css/admin.css">
+  <link rel="stylesheet" href="../css/admin.css?v=20261123-final">
 </head>
 <body>
 
@@ -23,11 +23,11 @@
       <p class="auth-subtitle">Enter your master passcode to access file controls and AI content moderation.</p>
 
       <form id="auth-form" class="auth-form">
-        <input type="password" id="auth-passcode" class="auth-input" placeholder="Passcode (Default: admin247)" required autocomplete="current-password" autofocus>
+        <input type="password" id="auth-passcode" class="auth-input" placeholder="Passcode (Default: JustCse188#)" required autocomplete="current-password" autofocus>
         <button type="submit" class="auth-btn-submit">Unlock Console &rarr;</button>
         <p id="auth-error" class="auth-error" hidden>⚠️ Incorrect passcode. Please try again.</p>
       </form>
-      <p class="auth-hint">Protected zone &bull; Default initial passcode: <code>admin247</code></p>
+      <p class="auth-hint">Protected zone &bull; Master passcode: <code>JustCse188#</code></p>
     </div>
   </div>
 
@@ -298,7 +298,7 @@
       <div class="modal-field">
         <label for="setting-new-passcode">Change Master Passcode</label>
         <input type="password" id="setting-new-passcode" placeholder="Leave blank to keep current passcode">
-        <p class="modal-hint">Initial default passcode is <code>admin247</code>.</p>
+        <p class="modal-hint">Master passcode set to <code>JustCse188#</code>.</p>
       </div>
 
       <div class="modal-actions">
@@ -312,6 +312,6 @@
   <div id="admin-toast-container" class="admin-toast-container"></div>
 
   <!-- Admin Controller -->
-  <script type="module" src="../js/admin.js"></script>
+  <script type="module" src="../js/admin.js?v=20261123-final"></script>
 </body>
 </html>
