@@ -656,16 +656,6 @@ async function uploadSingleFile(file, pin = null) {
     openShareDialog(uploaded);
 
     // Asynchronous background AI safety scan (Gemini API)
-    moderationService.screenItem(uploaded).then((modResult) => {
-      if (modResult.decision === 'NO' || !modResult.safe) {
-        uploaded.moderationStatus = 'flagged';
-        uploaded.moderationReason = modResult.reason;
-        renderFilesTable();
-        showToast(`⚠️ AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
-      }
-    }).catch((e) => console.warn('Moderation error:', e));
-
-    // Asynchronous background AI safety scan (Gemini API)
     moderationService.screenItem(uploaded, file).then((modResult) => {
       if (modResult.decision === 'NO' || !modResult.safe) {
         uploaded.moderationStatus = 'flagged';

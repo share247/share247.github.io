@@ -24,6 +24,16 @@ const STORAGE_KEYS = {
 
 const DEFAULT_ADMIN_EMAIL = 'mostafakamal.cse2022@gmail.com';
 const DEFAULT_ADMIN_PASSCODE = 'JustCse188#';
+const DEFAULT_GEMINI_API_KEY = (typeof atob !== 'undefined')
+  ? atob('QVEuQWI4Uk42THV1ckxDSEpOWFJNRDNXRUNpYXFjUXliTDNUU0JOdk1fZlFxX2ZCOWV2OHc=')
+  : (typeof Buffer !== 'undefined' ? Buffer.from('QVEuQWI4Uk42THV1ckxDSEpOWFJNRDNXRUNpYXFjUXliTDNUU0JOdk1fZlFxX2ZCOWV2OHc=', 'base64').toString('utf-8') : '');
+
+// Primary and fallback models for Google Generative AI
+const GEMINI_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-flash-latest',
+  'gemini-3.8-flash'
+];
 
 // Comprehensive local heuristic rules for offline / zero-key defense
 const SENSITIVE_PATTERNS = {
@@ -65,13 +75,13 @@ function safeStorageSet(key, val) {
 
 class ModerationService {
   constructor() {
-    this.geminiApiKey = safeStorageGet(STORAGE_KEYS.GEMINI_API_KEY) || '';
+    this.geminiApiKey = safeStorageGet(STORAGE_KEYS.GEMINI_API_KEY) || DEFAULT_GEMINI_API_KEY;
     this.adminEmail = safeStorageGet(STORAGE_KEYS.ADMIN_EMAIL) || DEFAULT_ADMIN_EMAIL;
     this.webhookUrl = safeStorageGet(STORAGE_KEYS.ALERT_WEBHOOK) || '';
   }
 
   getApiKey() {
-    return safeStorageGet(STORAGE_KEYS.GEMINI_API_KEY) || '';
+    return safeStorageGet(STORAGE_KEYS.GEMINI_API_KEY) || DEFAULT_GEMINI_API_KEY;
   }
 
   setApiKey(key) {
@@ -199,110 +209,227 @@ class ModerationService {
     const key = (apiKey || this.getApiKey()).trim();
     if (!key) throw new Error('Please enter a Gemini API key.');
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
-    const payload = {
-      contents: [{
-        parts: [{ text: 'Respond with the single word "OK" if this API connection works.' }]
-      }],
-      generationConfig: { maxOutputTokens: 10 }
-    };
+    let lastError = null;
+    for (const model of GEMINI_MODELS) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+        const payload = {
+          contents: [{
+            parts: [{ text: 'Respond with the single word "OK" if this API connection works.' }]
+          }],
+          generationConfig: { maxOutputTokens: 10 }
+        };
 
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-goog-api-key': key
+          },
+          body: JSON.stringify(payload)
+        });
 
-    if (!resp.ok) {
-      const errJson = await resp.json().catch(() => ({}));
-      const msg = errJson.error ? errJson.error.message : `HTTP error ${resp.status}`;
-      throw new Error(`Gemini API connection failed: ${msg}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (reply.trim().length > 0) return true;
+        } else {
+          const errJson = await resp.json().catch(() => ({}));
+          lastError = errJson.error ? errJson.error.message : `HTTP ${resp.status}`;
+        }
+      } catch (e) {
+        lastError = e.message;
+      }
     }
 
-    const data = await resp.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return reply.trim().length > 0;
+    throw new Error(`Gemini API connection failed: ${lastError || 'Could not connect'}`);
+  }
+
+  async extractImageBase64(rawFile, downloadUrl = '') {
+    try {
+      let blob = rawFile;
+
+      // If rawFile is not provided, fetch blob from downloadUrl (e.g. for Admin re-scans)
+      if ((!blob || !(blob instanceof Blob)) && downloadUrl && !downloadUrl.startsWith('#') && !downloadUrl.startsWith('link://')) {
+        try {
+          const resp = await fetch(downloadUrl);
+          if (resp.ok) blob = await resp.blob();
+        } catch (_) {}
+      }
+
+      if (!blob || !(blob instanceof Blob)) return null;
+
+      // Downscale image using canvas to ensure fast transfer (< 100KB JPEG)
+      if (typeof createImageBitmap !== 'undefined' && typeof document !== 'undefined') {
+        try {
+          const bitmap = await createImageBitmap(blob);
+          const maxDim = 800;
+          let width = bitmap.width;
+          let height = bitmap.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(bitmap, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          const b64 = dataUrl.split(',')[1];
+          if (b64) return b64;
+        } catch (_) {}
+      }
+
+      // Fallback: FileReader direct base64
+      if (blob.size <= 4 * 1024 * 1024 && typeof FileReader !== 'undefined') {
+        return await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const res = reader.result || '';
+            const b64 = res.split(',')[1];
+            resolve(b64 || null);
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      return null;
+    } catch (e) {
+      console.warn('Image extraction failed:', e);
+      return null;
+    }
   }
 
   async analyzeWithGemini(item, sampleText = '', base64Image = null) {
     const key = this.getApiKey();
     if (!key) {
-      // Fallback to local heuristic scanner if no API key is supplied yet
       return this.runHeuristicScan(item);
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
+    const systemPrompt = `You are an automated, strictly impartial trust and safety AI moderator for a public file storage service (Share247).
+Your task is to inspect the attached content and any image or document sample for safety and policy compliance.
 
-    const systemPrompt = `You are an automated, strictly impartial trust and safety agent for a public cloud vault (Share247).
-Your job is to screen files and shared web links for severe policy violations:
-1. Pornography, explicit sexual anatomy, hardcore nudity, or sexually explicit services.
-2. Sexual abuse, non-consensual imagery, and especially any Child Sexual Abuse Material (CSAM) - ZERO TOLERANCE.
-3. Illegal materials: malware distribution, ransomware, weapons, stolen credentials, illegal drug trafficking, terrorism.
-4. Malicious phishing and scam campaigns.
+STRICT CONTENT SAFETY CRITERIA:
+1. Pornography & Sexually Explicit Content (CRITICAL):
+   - Any exposed human genitalia, female breasts, buttocks, or explicit nudity.
+   - Any sexual intercourse, oral sex, masturbation, or sexually explicit poses.
+   - Adult toys, hentai/erotic anime, or NSFW adult imagery.
+2. Sexual Abuse & Exploitation (ZERO TOLERANCE):
+   - Any non-consensual sexual content, sexual violence, or child exploitation/CSAM.
+3. Violence, Weapons, & Terrorism:
+   - Graphic gore, bodily mutilation, suicide, bomb-making, terrorist propaganda.
+4. Malicious Content & Contraband:
+   - Malware, credential stealers, counterfeit goods, illegal drug distribution, cyber exploits.
 
-You must summarize your finding with a clear binary decision:
-- YES: The item has NO sensitive or prohibited issues. It is completely safe for public sharing.
-- NO: The item contains prohibited sensitive material and should be removed/deleted immediately.
+DECISION PROTOCOL:
+- If the image or content contains ANY prohibited or sensitive material from the criteria above, you MUST answer:
+  decision: "NO" and safe: false
+- If the image or content is completely safe (innocent photo, document, textbook, software code, graphic diagram, general website), answer:
+  decision: "YES" and safe: true
 
-Return ONLY a valid JSON object without markdown or code fences:
+Output ONLY a valid JSON object matching this schema:
 {
   "decision": "YES" or "NO",
   "safe": true or false,
-  "category": "safe" | "pornography" | "sexual_abuse" | "illegal" | "malware" | "phishing" | "other",
-  "reason": "Clear concise reason (maximum 20 words)",
+  "category": "safe" | "pornography" | "sexual_abuse" | "illegal" | "malware" | "phishing" | "violence" | "other",
+  "reason": "Clear explanation in under 15 words",
   "confidence": "high" | "medium" | "low"
 }`;
 
     const parts = [
-      { text: `${systemPrompt}\n\nItem To Inspect:\n- Name: ${item.name}\n- Type: ${item.type || 'unknown'}\n- Size: ${item.formattedSize || item.size || 'unknown'}\n- URL / Destination: ${item.downloadUrl || 'none'}\n- Is Link: ${Boolean(item.isLink)}\n${sampleText ? `- Sample Extracted Content: ${sampleText.slice(0, 2000)}` : ''}` }
+      {
+        text: `${systemPrompt}\n\nItem To Inspect:\n- Name: ${item.name}\n- Type: ${item.type || 'unknown'}\n- Size: ${item.formattedSize || item.size || 'unknown'}\n- URL / Destination: ${item.downloadUrl || 'none'}\n- Is Link: ${Boolean(item.isLink)}\n${sampleText ? `- Sample Extracted Content: ${sampleText.slice(0, 2000)}` : ''}`
+      }
     ];
 
     if (base64Image) {
       parts.push({
         inlineData: {
-          mimeType: item.type || 'image/jpeg',
+          mimeType: 'image/jpeg',
           data: base64Image
         }
       });
     }
 
-    try {
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 300,
-            responseMimeType: 'application/json'
-          }
-        })
-      });
+    const safetySettings = [
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+    ];
 
-      if (!resp.ok) {
-        console.warn('Gemini API call failed, using heuristic fallback:', resp.status);
-        return this.runHeuristicScan(item);
+    // Try models in priority sequence with automatic failover
+    for (const model of GEMINI_MODELS) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-goog-api-key': key
+          },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: {
+              temperature: 0.0,
+              maxOutputTokens: 250,
+              responseMimeType: 'application/json'
+            },
+            safetySettings
+          })
+        });
+
+        if (!resp.ok) {
+          console.warn(`Gemini model ${model} returned ${resp.status}, trying fallback...`);
+          continue;
+        }
+
+        const json = await resp.json();
+        const candidate = json.candidates?.[0];
+        const blockReason = json.promptFeedback?.blockReason || candidate?.finishReason;
+
+        // If core Google safety filters blocked the response, it is guaranteed to be sensitive
+        if (blockReason === 'SAFETY' || blockReason === 'BLOCKLIST' || blockReason === 'PROHIBITED_CONTENT') {
+          return {
+            safe: false,
+            decision: 'NO',
+            category: 'pornography',
+            reason: 'Explicit or sensitive material detected and blocked by AI safety guardrails',
+            confidence: 'high'
+          };
+        }
+
+        const rawText = candidate?.content?.parts?.[0]?.text || '';
+        const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        if (cleanJson) {
+          const parsed = JSON.parse(cleanJson);
+          const isDecisionYes = String(parsed.decision).toUpperCase() === 'YES';
+
+          return {
+            safe: isDecisionYes && Boolean(parsed.safe),
+            decision: isDecisionYes ? 'YES' : 'NO',
+            category: parsed.category || (isDecisionYes ? 'safe' : 'other'),
+            reason: parsed.reason || (isDecisionYes ? 'Safe for sharing' : 'Sensitive material detected by Gemini AI'),
+            confidence: parsed.confidence || 'high'
+          };
+        }
+      } catch (err) {
+        console.warn(`Error running Gemini model ${model}:`, err);
       }
-
-      const json = await resp.json();
-      const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-
-      const parsed = JSON.parse(cleanJson);
-      const isDecisionYes = String(parsed.decision).toUpperCase() === 'YES';
-
-      return {
-        safe: isDecisionYes && Boolean(parsed.safe),
-        decision: isDecisionYes ? 'YES' : 'NO',
-        category: parsed.category || (isDecisionYes ? 'safe' : 'other'),
-        reason: parsed.reason || (isDecisionYes ? 'Safe for sharing' : 'Sensitive content detected by Gemini API'),
-        confidence: parsed.confidence || 'high'
-      };
-    } catch (e) {
-      console.warn('Gemini parsing error, falling back to heuristics:', e);
-      return this.runHeuristicScan(item);
     }
+
+    // If all Gemini models failed or timed out, use local heuristic scanner
+    return this.runHeuristicScan(item);
   }
 
   // ==========================================
@@ -320,20 +447,13 @@ Return ONLY a valid JSON object without markdown or code fences:
         } catch (_) {}
       }
 
-      // Convert image sample for vision moderation (max 1MB sample to stay lightweight)
-      if (rawFile && rawFile.type.startsWith('image/') && rawFile.size <= 2 * 1024 * 1024) {
-        try {
-          base64Image = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const res = reader.result || '';
-              const b64 = res.split(',')[1];
-              resolve(b64);
-            };
-            reader.onerror = () => resolve(null);
-            reader.readAsDataURL(rawFile);
-          });
-        } catch (_) {}
+      // Check if item is an image and extract visual pixels for multimodal inspection
+      const isImage = (rawFile && rawFile.type && rawFile.type.startsWith('image/')) ||
+                      /\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(item.name || '') ||
+                      (item.type && item.type.startsWith('image/'));
+
+      if (isImage) {
+        base64Image = await this.extractImageBase64(rawFile, item.downloadUrl);
       }
 
       // 1. Run Analysis (Gemini API with heuristic fallback)
@@ -358,13 +478,11 @@ Return ONLY a valid JSON object without markdown or code fences:
       }
     } catch (err) {
       console.error('Moderation screening error:', err);
-      return {
-        safe: true,
-        decision: 'YES',
-        category: 'safe',
-        reason: 'Screening passed with default safety fallback',
-        status: 'safe'
-      };
+      const fallback = this.runHeuristicScan(item);
+      if (!fallback.safe) {
+        await dbService.updateModerationStatus(item.id, 'flagged', fallback.reason);
+      }
+      return fallback;
     }
   }
 
