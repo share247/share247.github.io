@@ -100,7 +100,13 @@ class DatabaseService {
 
   async initSupabase(config) {
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-    this.supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
+    this.supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
   }
 
   mapSupabaseRecord(r) {
@@ -799,7 +805,11 @@ class DatabaseService {
             onFileChange('UPDATE', this.mapSupabaseRecord(payload.new));
           }
         })
-        .subscribe();
+        .subscribe((status, err) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.debug('Share247: Realtime status notice:', err?.message || status);
+          }
+        });
       return channel;
     } catch (e) {
       console.warn('Realtime subscription error:', e);
