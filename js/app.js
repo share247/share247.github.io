@@ -31,9 +31,11 @@ const btnRefresh = document.getElementById('btn-refresh');
 const colSortName = document.getElementById('col-sort-name');
 const colSortDate = document.getElementById('col-sort-date');
 const colSortSize = document.getElementById('col-sort-size');
+const colSortViews = document.getElementById('col-sort-views');
 const nameSortArrow = document.getElementById('name-sort-arrow');
 const dateSortArrow = document.getElementById('date-sort-arrow');
 const sizeSortArrow = document.getElementById('size-sort-arrow');
+const viewsSortArrow = document.getElementById('views-sort-arrow');
 
 // Modals
 const shareDialog = document.getElementById('share-dialog');
@@ -296,8 +298,9 @@ function setupEventListeners() {
   colSortName.addEventListener('click', () => toggleSort('name'));
   colSortDate.addEventListener('click', () => toggleSort('date'));
   colSortSize.addEventListener('click', () => toggleSort('size'));
+  if (colSortViews) colSortViews.addEventListener('click', () => toggleSort('views'));
 
-  [colSortName, colSortDate, colSortSize].forEach(th => {
+  [colSortName, colSortDate, colSortSize, colSortViews].forEach(th => {
     if (th) {
       th.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -369,15 +372,17 @@ function updateSortUI() {
   const arrows = {
     name: document.getElementById('name-sort-arrow'),
     date: document.getElementById('date-sort-arrow'),
-    size: document.getElementById('size-sort-arrow')
+    size: document.getElementById('size-sort-arrow'),
+    views: document.getElementById('views-sort-arrow')
   };
   const headers = {
     name: colSortName,
     date: colSortDate,
-    size: colSortSize
+    size: colSortSize,
+    views: colSortViews
   };
 
-  ['name', 'date', 'size'].forEach(col => {
+  ['name', 'date', 'size', 'views'].forEach(col => {
     const arrow = arrows[col];
     const header = headers[col];
     if (arrow) {
@@ -395,7 +400,7 @@ function updateSortUI() {
 }
 
 function cycleSort() {
-  const columns = ['date', 'name', 'size'];
+  const columns = ['date', 'name', 'size', 'views'];
   const nextIdx = (columns.indexOf(sortColumn) + 1) % columns.length;
   sortColumn = columns[nextIdx];
   sortAsc = sortColumn === 'name';
@@ -851,6 +856,8 @@ function renderFilesTable() {
       comparison = a.name.localeCompare(b.name);
     } else if (sortColumn === 'size') {
       comparison = a.size - b.size;
+    } else if (sortColumn === 'views') {
+      comparison = (a.downloadsCount || 0) - (b.downloadsCount || 0);
     } else { // 'date'
       comparison = new Date(a.createdAt) - new Date(b.createdAt);
     }
@@ -934,6 +941,12 @@ function renderFilesTable() {
         </span>
       </td>
       <td class="cell-size">${sizeHtml}</td>
+      <td class="cell-views">
+        <span class="cell-views-count" title="${file.downloadsCount || 0} views">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span>${file.downloadsCount || 0}</span>
+        </span>
+      </td>
       <td class="cell-actions">
         <div class="row-hover-actions">
           <button class="row-action-btn btn-share" data-id="${file.id}" type="button" title="Share" aria-label="Share">

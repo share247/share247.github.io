@@ -168,8 +168,29 @@ function setupEventListeners() {
 
   // Settings Modal Controls
   btnOpenSettings.addEventListener('click', openSettingsModal);
-  settingsModal.querySelector('.btn-modal-cancel').addEventListener('click', () => settingsModal.close());
-  settingsModal.querySelector('.modal-close').addEventListener('click', () => settingsModal.close());
+
+  const btnCancelSettings = document.getElementById('btn-cancel-settings');
+  if (btnCancelSettings) {
+    btnCancelSettings.addEventListener('click', () => settingsModal.close());
+  }
+
+  const btnCloseSettingsX = document.getElementById('btn-close-settings-x');
+  if (btnCloseSettingsX) {
+    btnCloseSettingsX.addEventListener('click', () => settingsModal.close());
+  }
+
+  // Backdrop click to close settings modal
+  settingsModal.addEventListener('click', (e) => {
+    const rect = settingsModal.getBoundingClientRect();
+    if (
+      e.clientX < rect.left ||
+      e.clientX > rect.right ||
+      e.clientY < rect.top ||
+      e.clientY > rect.bottom
+    ) {
+      settingsModal.close();
+    }
+  });
 
   settingsForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -360,6 +381,12 @@ function renderVaultTable() {
         <span style="color: #cbd5e1;">${file.isLink ? 'Web Link' : (file.formattedSize || dbService.formatBytes(file.size))}</span>
       </td>
       <td>
+        <span style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: #94a3b8;" title="${file.downloadsCount || 0} views">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span>${file.downloadsCount || 0}</span>
+        </span>
+      </td>
+      <td>
         <span style="color: #94a3b8; font-size: 0.8125rem;">${remainingDays}</span>
       </td>
       <td>
@@ -464,8 +491,82 @@ async function handleToggleFlag(file) {
   }
 }
 
+// ==========================================
+// CLASSIC CONFIRMATION MODAL (NO NATIVE ALERTS)
+// ==========================================
+
+function showClassicConfirm({ title, message, requireClear = false, confirmBtnText = 'Confirm Delete' }) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('confirm-modal');
+    if (!modal) {
+      return resolve(requireClear ? window.prompt(message) === 'CLEAR' : window.confirm(message));
+    }
+
+    const titleEl = document.getElementById('confirm-modal-title');
+    const msgEl = document.getElementById('confirm-modal-msg');
+    const inputContainer = document.getElementById('confirm-input-container');
+    const inputEl = document.getElementById('confirm-input');
+    const btnCancel = document.getElementById('btn-confirm-cancel');
+    const btnCloseX = document.getElementById('btn-confirm-close-x');
+    const btnOk = document.getElementById('btn-confirm-ok');
+
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = message;
+    if (btnOk) btnOk.textContent = confirmBtnText;
+
+    if (requireClear) {
+      if (inputContainer) inputContainer.hidden = false;
+      if (inputEl) {
+        inputEl.value = '';
+        inputEl.placeholder = 'CLEAR';
+      }
+    } else {
+      if (inputContainer) inputContainer.hidden = true;
+    }
+
+    const cleanup = () => {
+      btnCancel?.removeEventListener('click', onCancel);
+      btnCloseX?.removeEventListener('click', onCancel);
+      btnOk?.removeEventListener('click', onOk);
+      modal.removeEventListener('cancel', onCancel);
+    };
+
+    const onCancel = () => {
+      cleanup();
+      modal.close();
+      resolve(false);
+    };
+
+    const onOk = () => {
+      if (requireClear && inputEl && inputEl.value.trim().toUpperCase() !== 'CLEAR') {
+        showAdminToast('You must type CLEAR to confirm.', 'error');
+        inputEl.focus();
+        return;
+      }
+      cleanup();
+      modal.close();
+      resolve(true);
+    };
+
+    btnCancel?.addEventListener('click', onCancel);
+    btnCloseX?.addEventListener('click', onCancel);
+    btnOk?.addEventListener('click', onOk);
+    modal.addEventListener('cancel', onCancel);
+
+    modal.showModal();
+    if (requireClear && inputEl) {
+      inputEl.focus();
+    }
+  });
+}
+
 async function handleDeleteSingleItem(file) {
-  const confirmed = window.confirm(`Permanently delete "${file.name}" from public storage and database?`);
+  const confirmed = await showClassicConfirm({
+    title: 'Delete Item',
+    message: `Are you sure you want to permanently delete "${file.name}" from public cloud storage and database?`,
+    requireClear: false,
+    confirmBtnText: 'Delete File'
+  });
   if (!confirmed) return;
 
   try {
@@ -486,7 +587,12 @@ async function handleDeleteAllFlagged() {
     return;
   }
 
-  const confirmed = window.confirm(`WARNING: Are you sure you want to permanently delete all ${flagged.length} flagged items? This cannot be undone.`);
+  const confirmed = await showClassicConfirm({
+    title: 'Purge Flagged Items',
+    message: `Are you sure you want to permanently delete all ${flagged.length} flagged items? This cannot be undone.`,
+    requireClear: false,
+    confirmBtnText: 'Purge Flagged'
+  });
   if (!confirmed) return;
 
   let deletedCount = 0;
@@ -507,14 +613,13 @@ async function handleDeleteAllFlagged() {
 }
 
 async function handleClearEntireVault() {
-  const confirmed = window.confirm('DANGER: Are you sure you want to permanently clear the ENTIRE vault?\n\nThis will permanently delete ALL active files, links, and database records.');
+  const confirmed = await showClassicConfirm({
+    title: 'Clear Entire Vault',
+    message: 'DANGER: Are you sure you want to permanently clear the ENTIRE vault? All active files, links, and database records will be permanently deleted.',
+    requireClear: true,
+    confirmBtnText: 'Delete All Files'
+  });
   if (!confirmed) return;
-
-  const doubleConfirmed = window.prompt('Type CLEAR to confirm deleting all database files:');
-  if (doubleConfirmed !== 'CLEAR') {
-    showAdminToast('Vault clearing cancelled.', 'info');
-    return;
-  }
 
   showAdminToast('Purging all vault files from database and storage...', 'info');
 

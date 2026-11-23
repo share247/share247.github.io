@@ -457,10 +457,31 @@ button {
 }
 
 .th-size, .cell-size {
-  width: 10%;
-  max-width: 10%;
+  width: 9%;
+  max-width: 9%;
   white-space: nowrap;
   text-align: left;
+}
+
+.th-views, .cell-views {
+  width: 8%;
+  max-width: 8%;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.cell-views-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.cell-views-count svg {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 
 .th-actions, .cell-actions {

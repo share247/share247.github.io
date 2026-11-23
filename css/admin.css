@@ -797,10 +797,23 @@ dialog.admin-modal::backdrop {
 
 .modal-close {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--admin-text-muted);
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0.35rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .modal-field {
@@ -851,6 +864,13 @@ dialog.admin-modal::backdrop {
   border-radius: 8px;
   font-size: 0.875rem;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-modal-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
 }
 
 .btn-modal-save {
@@ -858,6 +878,16 @@ dialog.admin-modal::backdrop {
   background: linear-gradient(135deg, #0284c7, #0369a1);
   border: none;
   color: #fff;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-modal-save:hover {
+  background: linear-gradient(135deg, #0369a1, #075985);
+}
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 600;
