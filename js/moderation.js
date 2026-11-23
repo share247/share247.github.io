@@ -249,7 +249,7 @@ class ModerationService {
     throw new Error(`Gemini API connection failed: ${lastError || 'Could not connect'}`);
   }
 
-  async extractImageBase64(rawFile, downloadUrl = '') {
+  async extractImageBase64(rawFile, downloadUrl = '', storagePath = '') {
     try {
       if (typeof rawFile === 'string' && rawFile.length > 50 && !rawFile.startsWith('http')) {
         return rawFile.replace(/^data:image\/[a-z]+;base64,/, '');
@@ -257,7 +257,15 @@ class ModerationService {
 
       let blob = rawFile;
 
-      // If rawFile is not provided, fetch blob from downloadUrl (e.g. for Admin re-scans)
+      // 1. Try Supabase storage SDK download if available
+      if ((!blob || !(blob instanceof Blob)) && storagePath && !storagePath.startsWith('link://') && !storagePath.startsWith('local://') && dbService?.supabase) {
+        try {
+          const { data, error } = await dbService.supabase.storage.from('public-files').download(storagePath);
+          if (!error && data) blob = data;
+        } catch (_) {}
+      }
+
+      // 2. If rawFile is not provided, fetch blob from downloadUrl (e.g. for Admin re-scans)
       if ((!blob || !(blob instanceof Blob)) && downloadUrl && !downloadUrl.startsWith('#') && !downloadUrl.startsWith('link://')) {
         try {
           const resp = await fetch(downloadUrl);
@@ -514,7 +522,7 @@ Output ONLY a valid JSON object matching this schema:
                       (item.type && item.type.startsWith('image/'));
 
       if (isImage && !base64Image) {
-        base64Image = await this.extractImageBase64(rawFile, item.downloadUrl);
+        base64Image = await this.extractImageBase64(rawFile, item.downloadUrl, item.storagePath);
       }
 
       // 1. Run Analysis (Gemini API with heuristic fallback)

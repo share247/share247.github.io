@@ -142,7 +142,9 @@ function setupEventListeners() {
   btnScanAll.addEventListener('click', handleScanAllWithAI);
 
   // Bulk Delete Flagged
-  btnDeleteAllFlagged.addEventListener('click', handleDeleteAllFlagged);
+  if (btnDeleteAllFlagged) {
+    btnDeleteAllFlagged.addEventListener('click', handleDeleteAllFlagged);
+  }
   if (btnAlertDeleteAll) {
     btnAlertDeleteAll.addEventListener('click', handleDeleteAllFlagged);
   }
@@ -234,10 +236,10 @@ function updateMetrics() {
     }
   });
 
-  metricTotalItems.textContent = total;
-  metricFlaggedItems.textContent = flagged.length;
-  metricSafeItems.textContent = safe.length;
-  metricStorageUsed.textContent = dbService.formatBytes(totalBytes);
+  if (metricTotalItems) metricTotalItems.textContent = total;
+  if (metricStorageUsed) metricStorageUsed.textContent = dbService.formatBytes(totalBytes);
+  if (metricFlaggedItems) metricFlaggedItems.textContent = flagged.length;
+  if (metricSafeItems) metricSafeItems.textContent = safe.length;
 
   // Update tab counters
   const tabAllCount = document.getElementById('tab-all-count');
@@ -253,11 +255,13 @@ function updateMetrics() {
   if (tabLinksCount) tabLinksCount.textContent = allVaultFiles.filter(f => f.isLink).length;
 
   // Alert Banner
-  if (flagged.length > 0) {
-    alertBanner.hidden = false;
-    alertFlaggedCount.textContent = `${flagged.length} Prohibited / Flagged ${flagged.length === 1 ? 'Item' : 'Items'} Detected`;
-  } else {
-    alertBanner.hidden = true;
+  if (alertBanner) {
+    if (flagged.length > 0) {
+      alertBanner.hidden = false;
+      if (alertFlaggedCount) alertFlaggedCount.textContent = `${flagged.length} Prohibited / Flagged ${flagged.length === 1 ? 'Item' : 'Items'} Detected`;
+    } else {
+      alertBanner.hidden = true;
+    }
   }
 }
 
@@ -365,12 +369,6 @@ function renderVaultTable() {
               <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
             </svg>
           </button>
-          <button class="action-btn btn-toggle-flag" type="button" title="${modStatus === 'flagged' ? 'Mark as Safe' : 'Flag Item as Sensitive'}" data-id="${file.id}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
-              <line x1="4" y1="22" x2="4" y2="15"></line>
-            </svg>
-          </button>
           <a class="action-btn" href="${escapeHtml(file.downloadUrl)}" target="_blank" rel="noopener noreferrer" title="Direct Preview / Open">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
@@ -391,9 +389,6 @@ function renderVaultTable() {
     // Action button handlers
     const btnScan = tr.querySelector('.btn-scan');
     btnScan.addEventListener('click', () => handleScanSingleItem(file, btnScan));
-
-    const btnToggle = tr.querySelector('.btn-toggle-flag');
-    btnToggle.addEventListener('click', () => handleToggleFlag(file));
 
     const btnDel = tr.querySelector('.btn-del');
     btnDel.addEventListener('click', () => handleDeleteSingleItem(file));
