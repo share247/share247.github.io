@@ -149,6 +149,67 @@ function setupEventListeners() {
     btnEmptyUpload.addEventListener('click', () => fileInput.click());
   }
 
+  // Navbar & Empty State Link Trigger
+  const btnNavbarLink = document.getElementById('btn-navbar-link');
+  if (btnNavbarLink) {
+    btnNavbarLink.addEventListener('click', () => openLinkDialog());
+  }
+
+  const btnEmptyLink = document.getElementById('btn-empty-link');
+  if (btnEmptyLink) {
+    btnEmptyLink.addEventListener('click', () => openLinkDialog());
+  }
+
+  // Switch between Upload and Link Dialogs
+  const btnSwitchToLink = document.getElementById('btn-switch-to-link');
+  if (btnSwitchToLink) {
+    btnSwitchToLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      const uploadDialog = document.getElementById('upload-dialog');
+      if (uploadDialog) uploadDialog.close();
+      openLinkDialog();
+    });
+  }
+
+  const btnSwitchToUpload = document.getElementById('btn-switch-to-upload');
+  if (btnSwitchToUpload) {
+    btnSwitchToUpload.addEventListener('click', (e) => {
+      e.preventDefault();
+      const linkDialog = document.getElementById('link-dialog');
+      if (linkDialog) linkDialog.close();
+      fileInput.click();
+    });
+  }
+
+  // Copy destination URL button in share modal
+  const btnCopyDestinationUrl = document.getElementById('btn-copy-destination-url');
+  if (btnCopyDestinationUrl) {
+    btnCopyDestinationUrl.addEventListener('click', () => {
+      const destInput = document.getElementById('share-destination-input');
+      if (destInput && destInput.value) {
+        copyTextToClipboard(destInput.value, 'Destination URL copied to clipboard!');
+        btnCopyDestinationUrl.classList.add('copied');
+        const label = btnCopyDestinationUrl.querySelector('.copy-label');
+        if (label) label.textContent = 'Copied! ✓';
+        setTimeout(() => {
+          btnCopyDestinationUrl.classList.remove('copied');
+          if (label) label.textContent = 'Copy URL';
+        }, 2000);
+      }
+    });
+  }
+
+  // Paste Event: if user presses Ctrl+V anywhere and clipboard is a URL, open Link Dialog!
+  window.addEventListener('paste', (e) => {
+    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+    if (activeTag === 'input' || activeTag === 'textarea') return;
+    const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+    if (pastedText && isPotentialUrl(pastedText.trim())) {
+      e.preventDefault();
+      openLinkDialog(pastedText.trim());
+    }
+  });
+
   fileInput.addEventListener('change', () => {
     if (fileInput.files && fileInput.files.length > 0) {
       handleFiles(Array.from(fileInput.files));
@@ -156,12 +217,13 @@ function setupEventListeners() {
     }
   });
 
-  // Full-window Drag and Drop (Reliable counter with file type verification)
+  // Full-window Drag and Drop (Reliable counter with file & link type verification)
   window.addEventListener('dragenter', (e) => {
     e.preventDefault();
     const uploadDialog = document.getElementById('upload-dialog');
-    if (uploadDialog && uploadDialog.open) return;
-    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+    const linkDialog = document.getElementById('link-dialog');
+    if ((uploadDialog && uploadDialog.open) || (linkDialog && linkDialog.open)) return;
+    if (e.dataTransfer && e.dataTransfer.types && (Array.from(e.dataTransfer.types).includes('Files') || Array.from(e.dataTransfer.types).includes('text/uri-list'))) {
       dragCounter++;
       if (dragCounter === 1) {
         dragOverlay.classList.add('active');
@@ -194,6 +256,11 @@ function setupEventListeners() {
     dragOverlay.hidden = true;
     if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFiles(Array.from(e.dataTransfer.files));
+    } else if (e.dataTransfer) {
+      const text = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+      if (text && isPotentialUrl(text.trim())) {
+        openLinkDialog(text.trim());
+      }
     }
   });
 
@@ -590,6 +657,161 @@ async function uploadSingleFile(file, pin = null) {
   }
 }
 
+function openLinkDialog(initialUrl = '') {
+  const linkDialog = document.getElementById('link-dialog');
+  const linkForm = document.getElementById('link-options-form');
+  const urlInput = document.getElementById('link-url-input');
+  const titleInput = document.getElementById('link-title-input');
+  const radioPublic = document.getElementById('radio-link-public');
+  const radioPin = document.getElementById('radio-link-pin');
+  const pinGroup = document.getElementById('link-pin-group');
+  const pinInput = document.getElementById('link-pin-code');
+  const displayTitle = document.getElementById('link-modal-display-title');
+  const displayMeta = document.getElementById('link-modal-meta');
+
+  if (!linkDialog) return;
+
+  urlInput.value = initialUrl;
+  titleInput.value = '';
+  radioPublic.checked = true;
+  radioPin.checked = false;
+  pinGroup.hidden = true;
+  pinInput.value = '';
+
+  function updatePreview() {
+    const rawUrl = urlInput.value.trim();
+    const rawTitle = titleInput.value.trim();
+    if (rawTitle) {
+      displayTitle.textContent = rawTitle;
+    } else if (rawUrl) {
+      displayTitle.textContent = rawUrl;
+    } else {
+      displayTitle.textContent = 'https://example.com';
+    }
+
+    const domain = rawUrl ? extractDomain(normalizeUrl(rawUrl)) : 'Web Link';
+    displayMeta.textContent = `${domain} • Auto-purges after 7 days`;
+  }
+
+  updatePreview();
+
+  urlInput.oninput = updatePreview;
+  titleInput.oninput = updatePreview;
+
+  const handleRadioChange = () => {
+    pinGroup.hidden = !radioPin.checked;
+    if (radioPin.checked) {
+      pinInput.focus();
+    }
+  };
+
+  radioPublic.onchange = handleRadioChange;
+  radioPin.onchange = handleRadioChange;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const rawUrl = urlInput.value.trim();
+    if (!rawUrl) {
+      showToast('Please enter a destination URL.', 'error');
+      urlInput.focus();
+      return;
+    }
+
+    const normalized = normalizeUrl(rawUrl);
+    try {
+      new URL(normalized);
+    } catch (_) {
+      showToast('Please enter a valid URL (e.g. https://example.com)', 'error');
+      urlInput.focus();
+      return;
+    }
+
+    let pin = null;
+    if (radioPin.checked) {
+      pin = pinInput.value.trim();
+      if (!pin) {
+        showToast('Please enter a PIN or select Public.', 'error');
+        pinInput.focus();
+        return;
+      }
+    }
+
+    linkForm.removeEventListener('submit', handleSubmit);
+    linkDialog.close();
+
+    await uploadSingleLink(normalized, titleInput.value.trim(), pin);
+  };
+
+  linkForm.onsubmit = handleSubmit;
+  linkDialog.scrollLeft = 0;
+  linkDialog.showModal();
+
+  setTimeout(() => {
+    if (initialUrl) {
+      titleInput.focus();
+    } else {
+      urlInput.focus();
+    }
+  }, 60);
+}
+
+async function uploadSingleLink(url, title = '', pin = null) {
+  uploadWidget.hidden = false;
+  uploadWidgetTitle.textContent = 'Saving Link';
+  widgetFileName.textContent = title || url;
+
+  const tracerBarFill = document.getElementById('tracer-bar-fill');
+  const widgetFilePercent = document.getElementById('widget-file-percent');
+  const tracerSize = document.getElementById('tracer-size');
+  const tracerSpeed = document.getElementById('tracer-speed');
+  const tracerEta = document.getElementById('tracer-eta');
+  const pulseDot = document.getElementById('tracer-pulse-dot');
+
+  if (pulseDot) pulseDot.style.backgroundColor = '#38bdf8';
+  if (tracerBarFill) tracerBarFill.style.width = '40%';
+  if (widgetFilePercent) widgetFilePercent.textContent = '40%';
+  if (tracerSize) tracerSize.textContent = 'Web Link';
+  if (tracerSpeed) tracerSpeed.textContent = 'Saving...';
+  if (tracerEta) tracerEta.textContent = 'Instant';
+
+  widgetFileIcon.className = 'widget-badge icon-type-cyan';
+  widgetFileIcon.textContent = 'LINK';
+
+  try {
+    const uploaded = await dbService.uploadLink(url, title, pin);
+
+    uploadWidgetTitle.textContent = 'Link Saved';
+    if (widgetFilePercent) widgetFilePercent.textContent = '100%';
+    if (tracerBarFill) tracerBarFill.style.width = '100%';
+    if (tracerSpeed) tracerSpeed.textContent = 'Done';
+    if (tracerEta) tracerEta.textContent = 'Saved';
+    if (pulseDot) pulseDot.style.backgroundColor = '#4ade80';
+
+    announcePolitely(`Shared link ${uploaded.name} successfully`);
+    showToast(pin ? `Shared link "${uploaded.name}" (PIN Protected)!` : `Shared link "${uploaded.name}" for 7 days!`, 'success');
+
+    const existingIdx = activeFiles.findIndex(f => f.id === uploaded.id);
+    if (existingIdx >= 0) {
+      activeFiles[existingIdx] = uploaded;
+    } else {
+      activeFiles.unshift(uploaded);
+    }
+    renderFilesTable();
+    updateFooterStorageTracker();
+
+    openShareDialog(uploaded);
+  } catch (err) {
+    console.error('Link save failed:', err);
+    uploadWidgetTitle.textContent = 'Save Failed';
+    if (pulseDot) pulseDot.style.backgroundColor = '#ef4444';
+    showToast(`Could not save link: ${err.message || err}`, 'error');
+  } finally {
+    setTimeout(() => {
+      uploadWidget.hidden = true;
+    }, 4000);
+  }
+}
+
 // ==========================================
 // TABLE RENDERING
 // ==========================================
@@ -619,6 +841,7 @@ function renderFilesTable() {
     if (!query) return true;
     return (
       f.name.toLowerCase().includes(query) ||
+      (f.downloadUrl && f.downloadUrl.toLowerCase().includes(query)) ||
       (f.extension && f.extension.toLowerCase().includes(query))
     );
   });
@@ -644,14 +867,17 @@ function renderFilesTable() {
     const emptyTitle = emptyState.querySelector('h2');
     const emptyDesc = emptyState.querySelector('p');
     const btnEmptyUpload = document.getElementById('btn-empty-upload');
+    const btnEmptyLink = document.getElementById('btn-empty-link');
     if (query) {
-      if (emptyTitle) emptyTitle.textContent = `No files matching "${query}"`;
+      if (emptyTitle) emptyTitle.textContent = `No items matching "${query}"`;
       if (emptyDesc) emptyDesc.innerHTML = 'Try adjusting your search query or clear the filter.';
       if (btnEmptyUpload) btnEmptyUpload.hidden = true;
+      if (btnEmptyLink) btnEmptyLink.hidden = true;
     } else {
-      if (emptyTitle) emptyTitle.textContent = 'No files in the vault';
-      if (emptyDesc) emptyDesc.innerHTML = 'Click <strong>+ Upload</strong> in the navbar or drop files anywhere onto this window.';
+      if (emptyTitle) emptyTitle.textContent = 'Vault is empty';
+      if (emptyDesc) emptyDesc.innerHTML = 'Upload a file or share a link to store it for 7 days with automatic purging.';
       if (btnEmptyUpload) btnEmptyUpload.hidden = false;
+      if (btnEmptyLink) btnEmptyLink.hidden = false;
     }
     updateFooterStorageTracker();
     return;
@@ -661,16 +887,43 @@ function renderFilesTable() {
 
   filtered.forEach((file) => {
     const tr = document.createElement('tr');
-    const { iconClass, label } = getFileTypeDetails(file.name);
+    const isItemLink = Boolean(file.isLink || file.type === 'url' || file.extension === 'link');
+    const { iconClass, label } = getFileTypeDetails(file.name, isItemLink);
     const { countdownText, badgeStyle } = getCountdownBadgeInfo(file.expiresAt);
     const formattedDate = formatDriveDate(file.createdAt);
+
+    const iconHtml = isItemLink
+      ? `<div class="row-file-icon icon-type-cyan" title="Shared Web Link">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+        </div>`
+      : `<div class="row-file-icon ${iconClass}">${label}</div>`;
+
+    const domainBadgeHtml = isItemLink
+      ? `<span class="row-url-domain" title="${escapeHtml(file.downloadUrl)}">${escapeHtml(extractDomain(file.downloadUrl))}</span>`
+      : '';
+
+    const sizeHtml = isItemLink
+      ? `<span class="badge-link-size">Link</span>`
+      : (file.formattedSize || dbService.formatBytes(file.size));
+
+    const actionBtnHtml = isItemLink
+      ? `<button class="row-action-btn btn-open-link" data-id="${file.id}" type="button" title="Open destination link" aria-label="Open Link">
+           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+         </button>`
+      : `<button class="row-action-btn btn-download" data-id="${file.id}" type="button" title="Download" aria-label="Download">
+           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+         </button>`;
 
     tr.innerHTML = `
       <td class="cell-name">
         <div class="cell-name-content">
-          <div class="row-file-icon ${iconClass}">${label}</div>
+          ${iconHtml}
           <div class="row-filename" title="${escapeHtml(file.name)}">
-            <span>${escapeHtml(file.name)}</span>
+            <span class="row-title-text">${escapeHtml(file.name)}</span>
+            ${domainBadgeHtml}
             ${file.hasPin ? `<span class="badge-pin-protected" title="Protected with PIN"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>PIN</span>` : ''}
           </div>
         </div>
@@ -688,15 +941,13 @@ function renderFilesTable() {
           <span class="countdown-label">${countdownText}</span>
         </span>
       </td>
-      <td class="cell-size">${file.formattedSize || dbService.formatBytes(file.size)}</td>
+      <td class="cell-size">${sizeHtml}</td>
       <td class="cell-actions">
         <div class="row-hover-actions">
-          <button class="row-action-btn btn-share" data-id="${file.id}" type="button" title="Share link" aria-label="Share">
+          <button class="row-action-btn btn-share" data-id="${file.id}" type="button" title="Share" aria-label="Share">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
           </button>
-          <button class="row-action-btn btn-download" data-id="${file.id}" type="button" title="Download" aria-label="Download">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          </button>
+          ${actionBtnHtml}
           <button class="row-action-btn btn-details" data-id="${file.id}" type="button" title="More options" aria-label="More options">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
           </button>
@@ -705,10 +956,21 @@ function renderFilesTable() {
     `;
 
     // Action handlers
-    tr.querySelector('.btn-download').addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleDownloadAttempt(file);
-    });
+    const btnDownload = tr.querySelector('.btn-download');
+    if (btnDownload) {
+      btnDownload.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleDownloadAttempt(file);
+      });
+    }
+
+    const btnOpenLink = tr.querySelector('.btn-open-link');
+    if (btnOpenLink) {
+      btnOpenLink.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleDownloadAttempt(file);
+      });
+    }
 
     tr.querySelector('.btn-share').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -721,7 +983,11 @@ function renderFilesTable() {
     });
 
     tr.addEventListener('dblclick', () => {
-      openShareDialog(file);
+      if (isItemLink) {
+        handleDownloadAttempt(file);
+      } else {
+        openShareDialog(file);
+      }
     });
 
     filesTbody.appendChild(tr);
@@ -823,7 +1089,7 @@ function handleDownloadAttempt(file, onSuccess) {
       if (onSuccess) {
         onSuccess();
       } else {
-        triggerDownload(file);
+        triggerItemAction(file);
       }
     });
     return;
@@ -832,24 +1098,55 @@ function handleDownloadAttempt(file, onSuccess) {
   if (onSuccess) {
     onSuccess();
   } else {
+    triggerItemAction(file);
+  }
+}
+
+async function triggerItemAction(file) {
+  if (file.isLink) {
+    try {
+      await dbService.incrementDownload(file.id);
+      file.downloadsCount = (file.downloadsCount || 0) + 1;
+      window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
+      showToast(`Opening "${file.name}"...`, 'info');
+    } catch (_) {
+      window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
+    }
+  } else {
     triggerDownload(file);
   }
 }
 
 function openPinModal(file, onUnlocked) {
   const pinDialog = document.getElementById('pin-dialog');
+  const pinDialogTitle = document.getElementById('pin-dialog-title');
+  const pinDialogDesc = document.getElementById('pin-dialog-desc');
   const pinModalName = document.getElementById('pin-modal-name');
   const pinModalMeta = document.getElementById('pin-modal-meta');
   const pinModalBadge = document.getElementById('pin-modal-badge');
   const pinInput = document.getElementById('unlock-pin-code');
   const errorFeedback = document.getElementById('pin-error-feedback');
   const pinForm = document.getElementById('pin-unlock-form');
+  const pinSubmitText = document.getElementById('pin-submit-text');
 
-  const { iconClass, label } = getFileTypeDetails(file.name);
-  pinModalBadge.className = `file-badge ${iconClass}`;
-  pinModalBadge.textContent = label;
-  pinModalName.textContent = file.name;
-  pinModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • 🔒 PIN Protected`;
+  if (file.isLink) {
+    if (pinDialogTitle) pinDialogTitle.textContent = 'Protected Link';
+    if (pinDialogDesc) pinDialogDesc.textContent = 'This link is secured with an access PIN. Enter the PIN to unlock and open.';
+    pinModalBadge.className = 'file-badge icon-type-cyan';
+    pinModalBadge.textContent = 'LINK';
+    pinModalName.textContent = file.name;
+    pinModalMeta.textContent = 'Web Link • 🔒 PIN Protected';
+    if (pinSubmitText) pinSubmitText.textContent = 'Unlock & Open';
+  } else {
+    const { iconClass, label } = getFileTypeDetails(file.name);
+    if (pinDialogTitle) pinDialogTitle.textContent = 'Protected File';
+    if (pinDialogDesc) pinDialogDesc.textContent = 'This file is secured with an access PIN. Enter the PIN to unlock and download.';
+    pinModalBadge.className = `file-badge ${iconClass}`;
+    pinModalBadge.textContent = label;
+    pinModalName.textContent = file.name;
+    pinModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • 🔒 PIN Protected`;
+    if (pinSubmitText) pinSubmitText.textContent = 'Unlock & Download';
+  }
 
   pinInput.value = '';
   pinInput.type = 'password';
@@ -946,14 +1243,59 @@ async function handleDeleteFile(file) {
 }
 
 function openShareDialog(file) {
-  const { iconClass, label } = getFileTypeDetails(file.name);
+  const isLink = Boolean(file.isLink || (file.storagePath && file.storagePath.startsWith('link://')));
+  const { iconClass, label } = getFileTypeDetails(file.name, isLink);
   const { countdownText } = getCountdownBadgeInfo(file.expiresAt);
 
   shareModalIconBadge.className = `file-badge ${iconClass}`;
   shareModalIconBadge.textContent = label;
   shareModalName.textContent = file.name;
-  shareModalSize.textContent = `${file.formattedSize || dbService.formatBytes(file.size)}${file.hasPin ? ' • 🔒 PIN Protected' : ''}`;
+  shareModalSize.textContent = `${isLink ? 'Web Link' : (file.formattedSize || dbService.formatBytes(file.size))}${file.hasPin ? ' • 🔒 PIN Protected' : ''}`;
   shareModalExpires.textContent = `Auto-purges in ${countdownText}`;
+
+  const shareTitle = document.getElementById('share-dialog-title');
+  if (shareTitle) {
+    shareTitle.textContent = isLink ? 'Link Details' : 'File Details';
+  }
+
+  const shareHeaderSvg = document.getElementById('share-dialog-header-svg');
+  if (shareHeaderSvg) {
+    if (isLink) {
+      shareHeaderSvg.innerHTML = `<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>`;
+    } else {
+      shareHeaderSvg.innerHTML = `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline>`;
+    }
+  }
+
+  const destGroup = document.getElementById('share-destination-group');
+  const destInput = document.getElementById('share-destination-input');
+  if (isLink) {
+    if (destGroup) destGroup.hidden = false;
+    if (destInput) destInput.value = file.downloadUrl || '';
+  } else {
+    if (destGroup) destGroup.hidden = true;
+  }
+
+  const shareHint = document.getElementById('share-dialog-hint');
+  if (shareHint) {
+    shareHint.textContent = isLink
+      ? 'Anyone with this link can view and open this web resource directly.'
+      : 'Anyone with this link can view and download this file directly.';
+  }
+
+  const modalDownloadLabel = document.getElementById('modal-download-label');
+  if (modalDownloadLabel) {
+    modalDownloadLabel.textContent = isLink ? 'Open Link' : 'Download';
+  }
+
+  const modalDownloadIcon = document.getElementById('modal-download-icon');
+  if (modalDownloadIcon) {
+    if (isLink) {
+      modalDownloadIcon.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+    } else {
+      modalDownloadIcon.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
+    }
+  }
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?file=${encodeURIComponent(file.id)}`;
   shareUrlInput.value = shareUrl;
@@ -996,7 +1338,10 @@ async function checkUrlQueryParams() {
 // HELPERS
 // ==========================================
 
-function getFileTypeDetails(filename) {
+function getFileTypeDetails(filename, isLink = false) {
+  if (isLink || (filename && (filename.endsWith('.link') || filename.endsWith('.url')))) {
+    return { iconClass: 'icon-type-cyan', label: 'LINK', isLink: true };
+  }
   const ext = (filename || '').split('.').pop().toLowerCase();
 
   if (['doc', 'docx', 'txt', 'rtf', 'odt', 'md'].includes(ext)) {
@@ -1015,6 +1360,35 @@ function getFileTypeDetails(filename) {
     return { iconClass: 'icon-type-purple', label: 'IMG' };
   }
   return { iconClass: 'icon-type-blue', label: ext ? ext.slice(0, 3).toUpperCase() : 'FILE' };
+}
+
+function isPotentialUrl(str) {
+  if (!str || typeof str !== 'string') return false;
+  const s = str.trim();
+  if (s.length > 2000) return false;
+  if (/^https?:\/\//i.test(s)) return true;
+  if (/^www\.[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(s)) return true;
+  if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(:\d+)?(\/.*)?$/i.test(s) && !/\s/.test(s)) return true;
+  return false;
+}
+
+function normalizeUrl(input) {
+  if (!input || typeof input !== 'string') return '';
+  let trimmed = input.trim();
+  if (!/^https?:\/\//i.test(trimmed)) {
+    trimmed = `https://${trimmed}`;
+  }
+  return trimmed;
+}
+
+function extractDomain(urlStr) {
+  if (!urlStr) return '';
+  try {
+    const url = new URL(normalizeUrl(urlStr));
+    return url.hostname.replace(/^www\./i, '');
+  } catch (_) {
+    return urlStr;
+  }
 }
 
 function getCountdownBadgeInfo(expiresAtStr) {

@@ -1,6 +1,6 @@
-# Share247 — Public Ephemeral Cloud Vault (Supabase Edition)
+# Share247 — Public Ephemeral Cloud Vault (Files & Links)
 
-A fast, dark-themed public file vault built for **GitHub Pages** with **Supabase (PostgreSQL + Storage)** and automatic 7-day file purging.
+A fast, dark-themed public file and web link vault built for **GitHub Pages** with **Supabase (PostgreSQL + Storage)** and automatic 7-day purging.
 
 ---
 
@@ -19,12 +19,22 @@ Since GitHub Pages exclusively hosts static client assets, **Supabase** acts as 
             v                                     v
 +-----------------------+             +-----------------------+
 |  POSTGRESQL (SUPABASE)|             |   SUPABASE STORAGE    |
-| (Files Table Metadata)|             | (Binary Blobs Bucket) |
+| (Files & Links Table) |             | (Binary Blobs Bucket) |
 |                       |             |                       |
 |   Auto-Delete via     |             |   Auto-Delete via     |
 |   pg_cron hourly job  |             |   pg_cron function    |
 +-----------------------+             +-----------------------+
 ```
+
+---
+
+## 🔗 Link Sharing & File Uploads
+
+Share247 supports both binary file uploads and web links/URLs:
+- **Web Link Sharing**: Share any website, video, document, or online resource link with an optional custom title and live domain badge preview.
+- **Access Security**: Choose between **Public** (open to anyone) or **PIN Protected** (requires a security PIN to open or download).
+- **Ephemeral Auto-Purge**: Both files and links are stored for exactly 7 days before being automatically purged.
+- **Convenient Discovery**: Add links via the **+ Link** navbar button, the empty-state action button, the modal switcher, dragging & dropping a URL onto the window, or pressing `Ctrl+V` anywhere on the page.
 
 ---
 
@@ -45,39 +55,41 @@ create table if not exists public.files (
   download_url text not null,
   created_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '7 days'),
-  downloads_count integer not null default 0
+  downloads_count integer not null default 0,
+  pin text
 );
 ```
 
 ### Storage Bucket: `public-files`
 - Public bucket for up to 100 MB files.
 - Binary blobs stored at `${id}/${filename}`.
+- Web links bypass bucket storage (`storage_path` prefixed with `link://`).
 
 ---
 
-## ⏱ 2. Automated 7-Day File Purging
+## ⏱ 2. Automated 7-Day Purging
 
 Automated deletion of both storage objects and database records is handled by PostgreSQL:
 
 1. **Purge Routine (`public.purge_expired_files()`)**:
-   Deletes expired binary blobs from `storage.objects` and purges their matching metadata rows from `public.files`.
+   Deletes expired binary blobs from `storage.objects` (bypassing link entries) and purges their matching metadata rows from `public.files`.
 2. **`pg_cron` Scheduled Job**:
    Runs automatically every hour (`0 * * * *`) in Supabase.
 3. **Client-Side Query Guard**:
-   Queries `where('expires_at', '>', now)` so expired files disappear from view immediately without waiting for the hourly cron.
+   Queries `where('expires_at', '>', now)` so expired files and links disappear from view immediately without waiting for the hourly cron.
 
 ---
 
 ## 🎨 3. User Interface
 
-- **Top Navbar Only**: Contains brand title, pill search bar, prominent **+ Upload** button, and Supabase connection settings.
-- **No Sidebar, No Footer**: 100% full-viewport table layout.
+- **Top Navbar**: Contains brand title, pill search bar, **+ Upload** file button, **+ Link** button, and connection status indicator.
 - **Drive-Inspired List View**:
-  - Columns: `Name`, `Owner` (me/avatar), `Date modified`, `Expires in` (7-day countdown badge), `File size`, and `Actions`.
-  - Row hover actions: Direct **Download**, **Share Link**, and **Details**.
+  - Columns: `Name`, `Owner` (me/avatar), `Date modified`, `Expires in` (7-day countdown badge), `File size` (or `Link` badge), and `Actions`.
+  - Row hover actions: Direct **Download / Open**, **Share Link**, and **Details**.
   - Sorting by Name, Date, or Size.
-  - Fullscreen drag-and-drop overlay.
-  - Floating upload widget with progress feedback.
+  - Fullscreen drag-and-drop overlay for both files and dropped URLs.
+  - Floating tracer widget with real-time feedback.
+  - Share modal with one-click copy for shareable URL and destination URL.
 
 ---
 

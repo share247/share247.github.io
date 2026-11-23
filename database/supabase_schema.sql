@@ -5,7 +5,9 @@
 -- This script configures the files table, public-files bucket,
 -- Row Level Security (RLS), and pg_cron automated 7-day purging.
 
--- 1. Create the files metadata table
+-- 1. Create the files & links metadata table
+-- Stores metadata for both binary files (stored in public-files bucket) and
+-- shared web links (where storage_path is prefixed with 'link://' and download_url holds destination URL).
 create table if not exists public.files (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(name) > 0 and char_length(name) <= 255),
@@ -114,10 +116,12 @@ begin
     from public.files 
     where expires_at < now()
   loop
-    -- Delete file binary from storage bucket
-    delete from storage.objects
-    where bucket_id = 'public-files'
-      and name = record_item.storage_path;
+    -- Delete file binary from storage bucket (skips non-bucket storage paths like link://)
+    if record_item.storage_path not like 'link://%' then
+      delete from storage.objects
+      where bucket_id = 'public-files'
+        and name = record_item.storage_path;
+    end if;
 
     -- Delete database metadata record
     delete from public.files where id = record_item.id;

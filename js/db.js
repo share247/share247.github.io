@@ -73,14 +73,16 @@ class DatabaseService {
     const hasPinInType = rawType.includes('; pin=');
     const pinVal = r.pin || (hasPinInType ? decodeURIComponent(rawType.split('; pin=')[1]) : null);
     const cleanType = rawType.split(';')[0];
+    const isLink = cleanType === 'url' || cleanType === 'text/x-uri' || r.extension === 'link' || (r.storage_path && r.storage_path.startsWith('link://'));
 
     return {
       id: r.id,
       name: r.name,
       size: r.size,
-      formattedSize: r.formatted_size,
+      formattedSize: isLink ? 'Link' : r.formatted_size,
       type: cleanType,
-      extension: r.extension,
+      isLink: isLink,
+      extension: r.extension || (isLink ? 'link' : ''),
       storagePath: r.storage_path,
       downloadUrl: r.download_url,
       createdAt: r.created_at,
@@ -213,6 +215,44 @@ class DatabaseService {
     return this.mapSupabaseRecord(inserted);
   }
 
+  async uploadLinkToSupabase(url, title, pin = null) {
+    const linkId = crypto.randomUUID ? crypto.randomUUID() : 'l_' + Date.now().toString(36);
+    const safeTitle = (title || '').trim() || url.replace(/^https?:\/\//i, '');
+    const displayName = safeTitle.slice(0, 255);
+    const storagePath = `link://${linkId}`;
+    const now = Date.now();
+    const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
+
+    const cleanType = 'url';
+    const typeWithPin = pin ? `${cleanType}; pin=${encodeURIComponent(pin)}` : cleanType;
+    const urlBytes = Math.max(1, new Blob([url]).size);
+
+    const record = {
+      name: displayName,
+      size: urlBytes,
+      formatted_size: 'Link',
+      type: typeWithPin,
+      extension: 'link',
+      storage_path: storagePath,
+      download_url: url,
+      created_at: new Date(now).toISOString(),
+      expires_at: expiresAt,
+      downloads_count: 0
+    };
+
+    const { data: inserted, error: insertError } = await this.supabase
+      .from('files')
+      .insert([record])
+      .select()
+      .single();
+
+    if (insertError) {
+      throw new Error(insertError.message || 'Failed to insert link in database');
+    }
+
+    return this.mapSupabaseRecord(inserted);
+  }
+
   async getActiveFilesFromSupabase() {
     const nowIso = new Date().toISOString();
     const { data, error } = await this.supabase
@@ -258,8 +298,8 @@ class DatabaseService {
   }
 
   async deleteFileFromSupabase(fileId, storagePath) {
-    // 1. Remove binary file from Supabase storage bucket
-    if (storagePath) {
+    // 1. Remove binary file from Supabase storage bucket (only for storage files)
+    if (storagePath && !storagePath.startsWith('link://') && !storagePath.startsWith('local://')) {
       try {
         await this.supabase.storage.from('public-files').remove([storagePath]);
       } catch (e) {
@@ -385,6 +425,41 @@ class DatabaseService {
     });
   }
 
+  async uploadLinkToLocal(url, title, pin = null) {
+    const linkId = crypto.randomUUID ? crypto.randomUUID() : 'l_' + Date.now().toString(36);
+    const safeTitle = (title || '').trim() || url.replace(/^https?:\/\//i, '');
+    const displayName = safeTitle.slice(0, 255);
+    const now = Date.now();
+    const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
+    const urlBytes = Math.max(1, new Blob([url]).size);
+
+    const record = {
+      id: linkId,
+      name: displayName,
+      size: urlBytes,
+      formattedSize: 'Link',
+      type: 'url',
+      isLink: true,
+      extension: 'link',
+      storagePath: `link://${linkId}`,
+      downloadUrl: url,
+      blob: null,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: expiresAt,
+      downloadsCount: 0,
+      hasPin: Boolean(pin),
+      pin: pin || null
+    };
+
+    return new Promise((resolve, reject) => {
+      const tx = this.idb.transaction(['files'], 'readwrite');
+      const store = tx.objectStore('files');
+      const req = store.add(record);
+      req.onsuccess = () => resolve(record);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   async getActiveFilesFromLocal() {
     await this.purgeExpiredLocalFiles();
     return new Promise((resolve, reject) => {
@@ -399,7 +474,9 @@ class DatabaseService {
           .filter(r => new Date(r.expiresAt).getTime() > now)
           .map(r => {
             const { blob, ...meta } = r;
-            meta.downloadUrl = blob ? URL.createObjectURL(blob) : '#';
+            meta.isLink = Boolean(meta.isLink || meta.type === 'url' || meta.extension === 'link');
+            meta.formattedSize = meta.isLink ? 'Link' : meta.formattedSize;
+            meta.downloadUrl = meta.isLink ? meta.downloadUrl : (blob ? URL.createObjectURL(blob) : '#');
             return meta;
           })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -422,7 +499,9 @@ class DatabaseService {
           return resolve(null);
         }
         const { blob, ...meta } = record;
-        meta.downloadUrl = blob ? URL.createObjectURL(blob) : '#';
+        meta.isLink = Boolean(meta.isLink || meta.type === 'url' || meta.extension === 'link');
+        meta.formattedSize = meta.isLink ? 'Link' : meta.formattedSize;
+        meta.downloadUrl = meta.isLink ? meta.downloadUrl : (blob ? URL.createObjectURL(blob) : '#');
         resolve(meta);
       };
       req.onerror = () => reject(req.error);
@@ -466,6 +545,13 @@ class DatabaseService {
       return this.uploadFileToSupabase(file, onProgress, pin);
     }
     return this.uploadFileToLocal(file, onProgress, pin);
+  }
+
+  async uploadLink(url, title, pin = null) {
+    if (this.mode === 'supabase') {
+      return this.uploadLinkToSupabase(url, title, pin);
+    }
+    return this.uploadLinkToLocal(url, title, pin);
   }
 
   async getActiveFiles() {
