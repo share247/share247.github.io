@@ -44,6 +44,7 @@ const adminEmptyState = document.getElementById('admin-empty-state');
 
 const btnScanAll = document.getElementById('btn-scan-all');
 const btnDeleteAllFlagged = document.getElementById('btn-delete-all-flagged');
+const btnClearEntireVault = document.getElementById('btn-clear-entire-vault');
 const btnRefresh = document.getElementById('btn-refresh');
 const btnOpenSettings = document.getElementById('btn-open-settings');
 const btnLogout = document.getElementById('btn-logout');
@@ -144,6 +145,11 @@ function setupEventListeners() {
   btnDeleteAllFlagged.addEventListener('click', handleDeleteAllFlagged);
   if (btnAlertDeleteAll) {
     btnAlertDeleteAll.addEventListener('click', handleDeleteAllFlagged);
+  }
+
+  // Clear Entire Vault
+  if (btnClearEntireVault) {
+    btnClearEntireVault.addEventListener('click', handleClearEntireVault);
   }
 
   // Mail Owner Alert
@@ -488,6 +494,31 @@ async function handleDeleteAllFlagged() {
   updateMetrics();
   renderVaultTable();
   showAdminToast(`Successfully purged ${deletedCount} prohibited item(s).`, 'success');
+}
+
+async function handleClearEntireVault() {
+  const confirmed = window.confirm('DANGER: Are you sure you want to permanently clear the ENTIRE vault?\n\nThis will permanently delete ALL active files, links, and database records.');
+  if (!confirmed) return;
+
+  const doubleConfirmed = window.prompt('Type CLEAR to confirm deleting all database files:');
+  if (doubleConfirmed !== 'CLEAR') {
+    showAdminToast('Vault clearing cancelled.', 'info');
+    return;
+  }
+
+  showAdminToast('Purging all vault files from database and storage...', 'info');
+
+  try {
+    await dbService.purgeAllVaultFiles();
+    allVaultFiles = [];
+    moderationService.clearAllAlerts();
+    updateMetrics();
+    renderVaultTable();
+    showAdminToast('Entire database vault cleared successfully.', 'success');
+  } catch (err) {
+    console.error('Purge error:', err);
+    showAdminToast(`Failed to clear vault: ${err.message || err}`, 'error');
+  }
 }
 
 async function handleScanAllWithAI() {

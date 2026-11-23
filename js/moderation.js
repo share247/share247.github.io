@@ -29,8 +29,9 @@ const DEFAULT_GEMINI_API_KEY = (typeof atob !== 'undefined')
   : (typeof Buffer !== 'undefined' ? Buffer.from('QVEuQWI4Uk42THV1ckxDSEpOWFJNRDNXRUNpYXFjUXliTDNUU0JOdk1fZlFxX2ZCOWV2OHc=', 'base64').toString('utf-8') : '');
 
 // Primary and fallback models for Google Generative AI
+// gemini-3.5-flash is prioritized to avoid 503 High Demand rate-limits on experimental endpoints
 const GEMINI_MODELS = [
-  'gemini-3.5-flash-lite',
+  'gemini-3.5-flash',
   'gemini-flash-latest',
   'gemini-3.8-flash'
 ];
@@ -217,7 +218,7 @@ class ModerationService {
           contents: [{
             parts: [{ text: 'Respond with the single word "OK" if this API connection works.' }]
           }],
-          generationConfig: { maxOutputTokens: 10 }
+          generationConfig: { maxOutputTokens: 500 }
         };
 
         const resp = await fetch(endpoint, {
@@ -381,7 +382,7 @@ Output ONLY a valid JSON object matching this schema:
             contents: [{ parts }],
             generationConfig: {
               temperature: 0.0,
-              maxOutputTokens: 250,
+              maxOutputTokens: 1000,
               responseMimeType: 'application/json'
             },
             safetySettings
