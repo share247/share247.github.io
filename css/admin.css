@@ -454,6 +454,23 @@ body {
   color: #f87171;
 }
 
+.tab-btn.tab-safe.active {
+  background: rgba(52, 211, 153, 0.18);
+  color: #34d399;
+}
+
+.tab-btn .tab-icon {
+  flex-shrink: 0;
+}
+
+.tab-btn.tab-danger .tab-icon {
+  color: #f87171;
+}
+
+.tab-btn.tab-safe .tab-icon {
+  color: #34d399;
+}
+
 .tab-count {
   font-size: 0.6875rem;
   background: rgba(255, 255, 255, 0.1);
@@ -662,6 +679,26 @@ body {
   color: #fca5a5;
   margin-top: 0.25rem;
   max-width: 260px;
+}
+
+.mod-badge svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.badge-sub-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--admin-text-dim);
+}
+
+.badge-sub-pill svg {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
 }
 
 /* Row Action Buttons */

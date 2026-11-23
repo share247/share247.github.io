@@ -203,7 +203,7 @@ function setupEventListeners() {
         copyTextToClipboard(destInput.value, 'Destination URL copied to clipboard!');
         btnCopyDestinationUrl.classList.add('copied');
         const label = btnCopyDestinationUrl.querySelector('.copy-label');
-        if (label) label.textContent = 'Copied! ✓';
+        if (label) label.textContent = 'Copied!';
         setTimeout(() => {
           btnCopyDestinationUrl.classList.remove('copied');
           if (label) label.textContent = 'Copy URL';
@@ -357,7 +357,7 @@ function setupEventListeners() {
     copyTextToClipboard(shareUrlInput.value, 'Direct link copied to clipboard!');
     btnCopyShareUrl.classList.add('copied');
     const labelSpan = btnCopyShareUrl.querySelector('.copy-label');
-    if (labelSpan) labelSpan.textContent = 'Copied! ✓';
+    if (labelSpan) labelSpan.textContent = 'Copied!';
     setTimeout(() => {
       btnCopyShareUrl.classList.remove('copied');
       if (labelSpan) labelSpan.textContent = 'Copy Link';
@@ -661,7 +661,7 @@ async function uploadSingleFile(file, pin = null) {
         uploaded.moderationStatus = 'flagged';
         uploaded.moderationReason = modResult.reason;
         renderFilesTable();
-        showToast(`⚠️ AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
+        showToast(`AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
       }
     }).catch((e) => console.warn('Moderation error:', e));
   } catch (err) {
@@ -772,7 +772,7 @@ async function uploadSingleLink(url) {
         uploaded.moderationStatus = 'flagged';
         uploaded.moderationReason = modResult.reason;
         renderFilesTable();
-        showToast(`⚠️ AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
+        showToast(`AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
       }
     }).catch((e) => console.warn('Moderation error:', e));
   } catch (err) {
@@ -902,7 +902,7 @@ function renderFilesTable() {
           <div class="row-filename">
             <span class="row-title-text">${escapeHtml(displayName)}</span>
             ${file.hasPin ? `<span class="badge-pin-protected" title="Protected with PIN"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>PIN</span>` : ''}
-            ${file.moderationStatus === 'flagged' ? `<span class="badge-flagged" title="Flagged by AI safety scan: ${escapeHtml(file.moderationReason || 'Prohibited content')}">⚠️ Flagged</span>` : ''}
+            ${file.moderationStatus === 'flagged' ? `<span class="badge-flagged" title="Flagged by AI safety scan: ${escapeHtml(file.moderationReason || 'Prohibited content')}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>Flagged</span>` : ''}
           </div>
         </div>
       </td>
@@ -1120,7 +1120,7 @@ function openPinModal(file, onUnlocked) {
     pinModalBadge.textContent = 'LINK';
     const websiteName = extractDomain(file.downloadUrl || file.name) || file.name;
     pinModalName.textContent = websiteName;
-    pinModalMeta.textContent = 'Web Link • 🔒 PIN Protected';
+    pinModalMeta.textContent = 'Web Link • PIN Protected';
     if (pinSubmitText) pinSubmitText.textContent = 'Unlock & Open';
   } else {
     const { iconClass, label } = getFileTypeDetails(file.name);
@@ -1129,7 +1129,7 @@ function openPinModal(file, onUnlocked) {
     pinModalBadge.className = `file-badge ${iconClass}`;
     pinModalBadge.textContent = label;
     pinModalName.textContent = file.name;
-    pinModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • 🔒 PIN Protected`;
+    pinModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • PIN Protected`;
     if (pinSubmitText) pinSubmitText.textContent = 'Unlock & Download';
   }
 
@@ -1179,7 +1179,7 @@ async function triggerDownload(file) {
       const response = await fetch(file.downloadUrl, { mode: 'cors' });
       if (!response.ok) {
         if (response.status === 404) {
-          showToast(`⚠️ File "${file.name}" was not found in storage (NoSuchKey / 404).`, 'error');
+          showToast(`File "${file.name}" was not found in storage (NoSuchKey / 404).`, 'error');
           openFilePreview(file);
           return;
         }
@@ -1191,7 +1191,7 @@ async function triggerDownload(file) {
       if (contentType.includes('application/json')) {
         const errJson = await response.clone().json().catch(() => null);
         if (errJson && (errJson.code === 'NoSuchKey' || errJson.statusCode === '404' || errJson.error === 'not_found')) {
-          showToast(`⚠️ File "${file.name}" is no longer available in cloud storage.`, 'error');
+          showToast(`File "${file.name}" is no longer available in cloud storage.`, 'error');
           openFilePreview(file);
           return;
         }
@@ -1248,7 +1248,7 @@ function openShareDialog(file) {
   shareModalIconBadge.textContent = label;
   const displayName = isLink ? (extractDomain(file.downloadUrl || file.name) || file.name) : file.name;
   shareModalName.textContent = displayName;
-  shareModalSize.textContent = `${isLink ? 'Web Link' : (file.formattedSize || dbService.formatBytes(file.size))}${file.hasPin ? ' • 🔒 PIN Protected' : ''}`;
+  shareModalSize.textContent = `${isLink ? 'Web Link' : (file.formattedSize || dbService.formatBytes(file.size))}${file.hasPin ? ' • PIN Protected' : ''}`;
   shareModalExpires.textContent = `Auto-purges in ${countdownText}`;
 
   const shareTitle = document.getElementById('share-dialog-title');
@@ -1491,7 +1491,8 @@ async function renderExcelSpreadsheetPreview(file, container, modal) {
             <div class="excel-tabs-wrap">
               ${sheetNames.map(s => `
                 <button type="button" class="excel-sheet-tab ${s === activeSheet ? 'active' : ''}" data-sheet="${escapeHtml(s)}">
-                  📊 ${escapeHtml(s)}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+                  <span>${escapeHtml(s)}</span>
                 </button>
               `).join('')}
             </div>
@@ -1675,7 +1676,7 @@ async function renderTextCodePreview(file, container, modal) {
     if (btnCopy) {
       btnCopy.onclick = () => {
         copyTextToClipboard(text, 'File text copied to clipboard!');
-        if (labelCopy) labelCopy.textContent = 'Copied! ✓';
+        if (labelCopy) labelCopy.textContent = 'Copied!';
         setTimeout(() => { if (labelCopy) labelCopy.textContent = 'Copy Text'; }, 2000);
       };
     }

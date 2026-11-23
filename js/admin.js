@@ -184,18 +184,18 @@ function setupEventListeners() {
   btnTestGeminiKey.addEventListener('click', async () => {
     const key = settingGeminiKey.value.trim();
     if (!key) {
-      testKeyStatus.textContent = '⚠️ Please enter an API key first';
+      testKeyStatus.textContent = 'Please enter an API key first';
       testKeyStatus.style.color = '#fbbf24';
       return;
     }
-    testKeyStatus.textContent = '⏳ Testing connection...';
+    testKeyStatus.textContent = 'Testing connection...';
     testKeyStatus.style.color = '#38bdf8';
     try {
       await moderationService.testApiKey(key);
-      testKeyStatus.textContent = '✅ API key verified & functional!';
+      testKeyStatus.textContent = 'API key verified & functional!';
       testKeyStatus.style.color = '#34d399';
     } catch (err) {
-      testKeyStatus.textContent = `❌ ${err.message || 'Verification failed'}`;
+      testKeyStatus.textContent = err.message || 'Verification failed';
       testKeyStatus.style.color = '#f87171';
     }
   });
@@ -306,14 +306,27 @@ function renderVaultTable() {
     if (modStatus === 'flagged') {
       modBadgeHtml = `
         <div>
-          <span class="mod-badge mod-badge-flagged">🚨 FLAGGED</span>
+          <span class="mod-badge mod-badge-flagged">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>FLAGGED</span>
+          </span>
           <div class="mod-reason-text" title="${escapeHtml(file.moderationReason)}">${escapeHtml(file.moderationReason || 'Prohibited content')}</div>
         </div>
       `;
     } else if (modStatus === 'safe') {
-      modBadgeHtml = `<span class="mod-badge mod-badge-safe">✅ SAFE</span>`;
+      modBadgeHtml = `
+        <span class="mod-badge mod-badge-safe">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <span>SAFE</span>
+        </span>
+      `;
     } else {
-      modBadgeHtml = `<span class="mod-badge mod-badge-pending">⏳ UNCHECKED</span>`;
+      modBadgeHtml = `
+        <span class="mod-badge mod-badge-pending">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span>UNCHECKED</span>
+        </span>
+      `;
     }
 
     const remainingDays = getDaysRemaining(file.expiresAt);
@@ -330,8 +343,8 @@ function renderVaultTable() {
             </a>
             <div class="item-subtext">
               <span>ID: ${escapeHtml(file.id.slice(0, 8))}...</span>
-              ${file.hasPin ? '<span>🔒 PIN</span>' : ''}
-              ${isItemLink ? `<span>🔗 Web Link</span>` : ''}
+              ${file.hasPin ? '<span class="badge-sub-pill"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> PIN</span>' : ''}
+              ${isItemLink ? '<span class="badge-sub-pill"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Link</span>' : ''}
             </div>
           </div>
         </div>
@@ -395,7 +408,7 @@ function renderVaultTable() {
         const resp = await fetch(file.downloadUrl, { method: 'HEAD' }).catch(() => null);
         if (resp && resp.status === 404) {
           e.preventDefault();
-          showAdminToast(`⚠️ File "${file.name}" object is missing from storage (404 NoSuchKey). Delete this dead record using the trash button.`, 'error');
+          showAdminToast(`File "${file.name}" object is missing from storage (404 NoSuchKey). Delete this dead record using the trash button.`, 'error');
         }
       } catch (_) {}
     };
@@ -424,9 +437,9 @@ async function handleScanSingleItem(file, triggerBtn) {
     renderVaultTable();
 
     if (result.decision === 'NO' || !result.safe) {
-      showAdminToast(`🚨 Flagged "${file.name}": ${result.reason}`, 'error');
+      showAdminToast(`Flagged "${file.name}": ${result.reason}`, 'error');
     } else {
-      showAdminToast(`✅ "${file.name}" verified safe! (Gemini AI: YES)`, 'success');
+      showAdminToast(`"${file.name}" verified safe (Gemini AI: YES).`, 'success');
     }
   } catch (err) {
     console.error('Scan error:', err);
@@ -553,9 +566,9 @@ async function handleScanAllWithAI() {
   renderVaultTable();
 
   if (flaggedCount > 0) {
-    showAdminToast(`Audit complete: 🚨 ${flaggedCount} prohibited item(s) flagged!`, 'error');
+    showAdminToast(`Audit complete: ${flaggedCount} prohibited item(s) flagged.`, 'error');
   } else {
-    showAdminToast('Audit complete: ✅ All vault items approved safe.', 'success');
+    showAdminToast('Audit complete: All vault items approved safe.', 'success');
   }
 }
 
