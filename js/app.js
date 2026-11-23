@@ -656,12 +656,22 @@ async function uploadSingleFile(file, pin = null) {
     openShareDialog(uploaded);
 
     // Asynchronous background AI safety scan (Gemini API)
-    moderationService.screenItem(uploaded, file).then((modResult) => {
+    moderationService.screenItem(uploaded, file).then(async (modResult) => {
       if (modResult.decision === 'NO' || !modResult.safe) {
-        uploaded.moderationStatus = 'flagged';
-        uploaded.moderationReason = modResult.reason;
+        // Automatically delete prohibited item from public drive and local state
+        await dbService.deleteFile(uploaded.id, uploaded.storagePath);
+        activeFiles = activeFiles.filter(f => f.id !== uploaded.id);
         renderFilesTable();
-        showToast(`AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
+        updateFooterStorageTracker();
+
+        // Close share modal if open
+        const shareDialog = document.getElementById('share-dialog');
+        if (shareDialog && shareDialog.open) {
+          shareDialog.close();
+        }
+
+        announcePolitely(`Prohibited content detected. "${uploaded.name}" was automatically deleted.`);
+        showToast(`AI Content Safety: "${uploaded.name}" contained prohibited content and was automatically deleted.`, 'error');
       }
     }).catch((e) => console.warn('Moderation error:', e));
   } catch (err) {
@@ -767,12 +777,22 @@ async function uploadSingleLink(url) {
     openShareDialog(uploaded);
 
     // Asynchronous background AI safety scan (Gemini API)
-    moderationService.screenItem(uploaded).then((modResult) => {
+    moderationService.screenItem(uploaded).then(async (modResult) => {
       if (modResult.decision === 'NO' || !modResult.safe) {
-        uploaded.moderationStatus = 'flagged';
-        uploaded.moderationReason = modResult.reason;
+        // Automatically delete prohibited link from public drive and local state
+        await dbService.deleteFile(uploaded.id, uploaded.storagePath);
+        activeFiles = activeFiles.filter(f => f.id !== uploaded.id);
         renderFilesTable();
-        showToast(`AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
+        updateFooterStorageTracker();
+
+        // Close share modal if open
+        const shareDialog = document.getElementById('share-dialog');
+        if (shareDialog && shareDialog.open) {
+          shareDialog.close();
+        }
+
+        announcePolitely(`Prohibited content detected. "${uploaded.name}" was automatically deleted.`);
+        showToast(`AI Content Safety: "${uploaded.name}" contained prohibited content and was automatically deleted.`, 'error');
       }
     }).catch((e) => console.warn('Moderation error:', e));
   } catch (err) {

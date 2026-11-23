@@ -251,6 +251,10 @@ class ModerationService {
 
   async extractImageBase64(rawFile, downloadUrl = '') {
     try {
+      if (typeof rawFile === 'string' && rawFile.length > 50 && !rawFile.startsWith('http')) {
+        return rawFile.replace(/^data:image\/[a-z]+;base64,/, '');
+      }
+
       let blob = rawFile;
 
       // If rawFile is not provided, fetch blob from downloadUrl (e.g. for Admin re-scans)
@@ -304,6 +308,24 @@ class ModerationService {
           reader.onerror = () => resolve(null);
           reader.readAsDataURL(blob);
         });
+      }
+
+      // Fallback: ArrayBuffer to base64
+      if (blob && typeof blob.arrayBuffer === 'function') {
+        try {
+          const buf = await blob.arrayBuffer();
+          if (typeof Buffer !== 'undefined') {
+            return Buffer.from(buf).toString('base64');
+          } else {
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+          }
+        } catch (_) {}
       }
 
       return null;
@@ -466,16 +488,24 @@ Output ONLY a valid JSON object matching this schema:
   // ==========================================
   // COMPLETE END-TO-END SCREENING WORKFLOW
   // ==========================================
-  async screenItem(item, rawFile = null) {
+  async screenItem(item, rawFile = null, precomputedBase64 = null) {
     try {
       let sampleText = '';
-      let base64Image = null;
+      let base64Image = precomputedBase64 || null;
 
-      // Extract sample for text/code/document files
-      if (rawFile && (rawFile.type.startsWith('text/') || rawFile.name.endsWith('.txt') || rawFile.name.endsWith('.md') || rawFile.name.endsWith('.json'))) {
-        try {
-          sampleText = await rawFile.slice(0, 3000).text();
-        } catch (_) {}
+      // Extract sample for text/code/document files safely
+      if (rawFile) {
+        const typeStr = (rawFile.type || '').toLowerCase();
+        const nameStr = (rawFile.name || item.name || '').toLowerCase();
+        if (typeStr.startsWith('text/') || nameStr.endsWith('.txt') || nameStr.endsWith('.md') || nameStr.endsWith('.json') || nameStr.endsWith('.csv')) {
+          try {
+            if (typeof rawFile.slice === 'function') {
+              sampleText = await rawFile.slice(0, 3000).text();
+            } else if (typeof rawFile.text === 'function') {
+              sampleText = (await rawFile.text()).slice(0, 3000);
+            }
+          } catch (_) {}
+        }
       }
 
       // Check if item is an image and extract visual pixels for multimodal inspection
@@ -483,7 +513,7 @@ Output ONLY a valid JSON object matching this schema:
                       /\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(item.name || '') ||
                       (item.type && item.type.startsWith('image/'));
 
-      if (isImage) {
+      if (isImage && !base64Image) {
         base64Image = await this.extractImageBase64(rawFile, item.downloadUrl);
       }
 
@@ -493,18 +523,37 @@ Output ONLY a valid JSON object matching this schema:
       // 2. If decision is NO (Unsafe / Flagged)
       if (!result.safe || result.decision === 'NO') {
         const flagReason = result.reason || 'Flagged by automated AI trust & safety scan';
-        await dbService.updateModerationStatus(item.id, 'flagged', flagReason);
-        await this.notifyOwnerOfViolation(item, flagReason, result.category);
+
+        // AUTOMATIC DELETE: Instantly purge prohibited file/image from storage and database
+        try {
+          await dbService.deleteFile(item.id, item.storagePath);
+          console.warn(`[Auto-Purge] Automatically deleted flagged item "${item.name}" (ID: ${item.id}). Reason: ${flagReason}`);
+        } catch (delErr) {
+          console.error(`[Auto-Purge] Failed to auto-delete flagged item "${item.name}":`, delErr);
+        }
+
+        try {
+          await dbService.updateModerationStatus(item.id, 'flagged', flagReason);
+        } catch (_) {}
+
+        try {
+          await this.notifyOwnerOfViolation(item, flagReason, result.category);
+        } catch (notifyErr) {
+          console.warn('[Moderation] Notice logging failed:', notifyErr);
+        }
+
         return {
           ...result,
-          status: 'flagged'
+          status: 'flagged',
+          deleted: true
         };
       } else {
         // Safe (YES)
         await dbService.updateModerationStatus(item.id, 'safe', 'Approved by AI Content Safety scan');
         return {
           ...result,
-          status: 'safe'
+          status: 'safe',
+          deleted: false
         };
       }
     } catch (err) {
@@ -512,6 +561,9 @@ Output ONLY a valid JSON object matching this schema:
       const fallback = this.runHeuristicScan(item);
       if (!fallback.safe) {
         await dbService.updateModerationStatus(item.id, 'flagged', fallback.reason);
+        try {
+          await dbService.deleteFile(item.id, item.storagePath);
+        } catch (_) {}
       }
       return fallback;
     }
@@ -521,45 +573,55 @@ Output ONLY a valid JSON object matching this schema:
   // OWNER NOTIFICATION & ALERT DELIVERY
   // ==========================================
   async notifyOwnerOfViolation(item, reason, category) {
-    const alertRecord = {
-      id: 'alt_' + Date.now().toString(36),
-      itemId: item.id,
-      itemName: item.name,
-      itemType: item.isLink ? 'Web Link' : (item.type || 'File'),
-      downloadUrl: item.downloadUrl,
-      category: category || 'sensitive_content',
-      reason: reason,
-      timestamp: new Date().toISOString(),
-      adminEmail: this.getAdminEmail(),
-      resolved: false
-    };
+    try {
+      const alertRecord = {
+        id: 'alt_' + Date.now().toString(36),
+        itemId: item.id,
+        itemName: item.name,
+        itemType: item.isLink ? 'Web Link' : (item.type || 'File'),
+        downloadUrl: item.downloadUrl,
+        category: category || 'sensitive_content',
+        reason: reason,
+        timestamp: new Date().toISOString(),
+        adminEmail: this.getAdminEmail(),
+        resolved: false
+      };
 
-    // Save alert in localStorage for the Admin Dashboard
-    const storedAlerts = this.getStoredAlerts();
-    storedAlerts.unshift(alertRecord);
-    localStorage.setItem(STORAGE_KEYS.MODERATION_ALERTS, JSON.stringify(storedAlerts.slice(0, 50)));
-
-    // Send Webhook if configured
-    const webhook = this.getWebhookUrl();
-    if (webhook) {
-      try {
-        await fetch(webhook, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'share247_file_flagged',
-            alert: alertRecord,
-            actionRequired: 'Delete flagged file via admin dashboard',
-            adminDashboardUrl: `${window.location.origin}/admin`
-          })
-        });
-      } catch (e) {
-        console.warn('Could not dispatch webhook alert:', e);
+      // Save alert in localStorage for the Admin Dashboard
+      if (typeof localStorage !== 'undefined') {
+        try {
+          const storedAlerts = this.getStoredAlerts();
+          storedAlerts.unshift(alertRecord);
+          localStorage.setItem(STORAGE_KEYS.MODERATION_ALERTS, JSON.stringify(storedAlerts.slice(0, 50)));
+        } catch (_) {}
       }
-    }
 
-    console.warn(`[AI Moderation Alert] Owner notification logged for flagged file: "${item.name}" (Reason: ${reason})`);
-    return alertRecord;
+      // Send Webhook if configured
+      const webhook = this.getWebhookUrl();
+      if (webhook && typeof fetch !== 'undefined') {
+        try {
+          const origin = typeof window !== 'undefined' ? window.location.origin : 'https://share247.github.io';
+          await fetch(webhook, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: 'share247_file_flagged',
+              alert: alertRecord,
+              actionRequired: 'Prohibited file detected and automatically deleted',
+              adminDashboardUrl: `${origin}/admin`
+            })
+          });
+        } catch (e) {
+          console.warn('Could not dispatch webhook alert:', e);
+        }
+      }
+
+      console.warn(`[AI Moderation Alert] Owner notification logged for flagged file: "${item.name}" (Reason: ${reason})`);
+      return alertRecord;
+    } catch (e) {
+      console.warn('Could not complete notifyOwnerOfViolation:', e);
+      return null;
+    }
   }
 
   getStoredAlerts() {

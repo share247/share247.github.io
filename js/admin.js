@@ -430,15 +430,17 @@ async function handleScanSingleItem(file, triggerBtn) {
 
   try {
     const result = await moderationService.screenItem(file);
-    file.moderationStatus = result.status;
-    file.moderationReason = result.reason;
-
-    updateMetrics();
-    renderVaultTable();
 
     if (result.decision === 'NO' || !result.safe) {
-      showAdminToast(`Flagged "${file.name}": ${result.reason}`, 'error');
+      allVaultFiles = allVaultFiles.filter(f => String(f.id) !== String(file.id));
+      updateMetrics();
+      renderVaultTable();
+      showAdminToast(`Prohibited content in "${file.name}". Automatically deleted: ${result.reason}`, 'error');
     } else {
+      file.moderationStatus = result.status;
+      file.moderationReason = result.reason;
+      updateMetrics();
+      renderVaultTable();
       showAdminToast(`"${file.name}" verified safe (Gemini AI: YES).`, 'success');
     }
   } catch (err) {
@@ -541,18 +543,26 @@ async function handleScanAllWithAI() {
   }
 
   btnScanAll.disabled = true;
-  btnScanAll.textContent = '⏳ Scanning...';
+  btnScanAll.textContent = 'Scanning...';
   showAdminToast(`Starting Gemini AI screening on ${allVaultFiles.length} item(s)...`, 'info');
 
-  let flaggedCount = 0;
+  let autoDeletedCount = 0;
+  const remainingFiles = [];
   for (const file of allVaultFiles) {
     try {
       const res = await moderationService.screenItem(file);
-      file.moderationStatus = res.status;
-      file.moderationReason = res.reason;
-      if (res.status === 'flagged') flaggedCount++;
-    } catch (_) {}
+      if (res.decision === 'NO' || !res.safe || res.status === 'flagged') {
+        autoDeletedCount++;
+      } else {
+        file.moderationStatus = res.status;
+        file.moderationReason = res.reason;
+        remainingFiles.push(file);
+      }
+    } catch (_) {
+      remainingFiles.push(file);
+    }
   }
+  allVaultFiles = remainingFiles;
 
   btnScanAll.disabled = false;
   btnScanAll.innerHTML = `
@@ -565,8 +575,8 @@ async function handleScanAllWithAI() {
   updateMetrics();
   renderVaultTable();
 
-  if (flaggedCount > 0) {
-    showAdminToast(`Audit complete: ${flaggedCount} prohibited item(s) flagged.`, 'error');
+  if (autoDeletedCount > 0) {
+    showAdminToast(`Audit complete: ${autoDeletedCount} prohibited item(s) detected and automatically deleted.`, 'error');
   } else {
     showAdminToast('Audit complete: All vault items approved safe.', 'success');
   }
