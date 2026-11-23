@@ -1838,7 +1838,6 @@ function isTextOrCodeExtension(ext) {
   ]);
   return codeExts.has((ext || '').toLowerCase());
 }
-}
 
 async function checkUrlQueryParams() {
   const params = new URLSearchParams(window.location.search);
