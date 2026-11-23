@@ -31,10 +31,10 @@ Since GitHub Pages exclusively hosts static client assets, **Supabase** acts as 
 ## 🔗 Link Sharing & File Uploads
 
 Share247 supports both binary file uploads and web links/URLs:
-- **Web Link Sharing**: Share any website, video, document, or online resource link with an optional custom title and live domain badge preview.
-- **Access Security**: Choose between **Public** (open to anyone) or **PIN Protected** (requires a security PIN to open or download).
+- **Web Link Sharing**: Instantly share any website, video, document, or online resource link with a clean destination URL input and automatic 7-day purging.
+- **File Upload Security**: Uploaded files can optionally be secured with a PIN code.
 - **Ephemeral Auto-Purge**: Both files and links are stored for exactly 7 days before being automatically purged.
-- **Convenient Discovery**: Add links via the **+ Link** navbar button, the empty-state action button, the modal switcher, dragging & dropping a URL onto the window, or pressing `Ctrl+V` anywhere on the page.
+- **Convenient Discovery**: Add links via the **+ Link** navbar button, the empty-state action button, dragging & dropping a URL onto the window, or pressing `Ctrl+V` anywhere on the page.
 
 ---
 

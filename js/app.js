@@ -160,27 +160,6 @@ function setupEventListeners() {
     btnEmptyLink.addEventListener('click', () => openLinkDialog());
   }
 
-  // Switch between Upload and Link Dialogs
-  const btnSwitchToLink = document.getElementById('btn-switch-to-link');
-  if (btnSwitchToLink) {
-    btnSwitchToLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      const uploadDialog = document.getElementById('upload-dialog');
-      if (uploadDialog) uploadDialog.close();
-      openLinkDialog();
-    });
-  }
-
-  const btnSwitchToUpload = document.getElementById('btn-switch-to-upload');
-  if (btnSwitchToUpload) {
-    btnSwitchToUpload.addEventListener('click', (e) => {
-      e.preventDefault();
-      const linkDialog = document.getElementById('link-dialog');
-      if (linkDialog) linkDialog.close();
-      fileInput.click();
-    });
-  }
-
   // Copy destination URL button in share modal
   const btnCopyDestinationUrl = document.getElementById('btn-copy-destination-url');
   if (btnCopyDestinationUrl) {
@@ -661,52 +640,10 @@ function openLinkDialog(initialUrl = '') {
   const linkDialog = document.getElementById('link-dialog');
   const linkForm = document.getElementById('link-options-form');
   const urlInput = document.getElementById('link-url-input');
-  const titleInput = document.getElementById('link-title-input');
-  const radioPublic = document.getElementById('radio-link-public');
-  const radioPin = document.getElementById('radio-link-pin');
-  const pinGroup = document.getElementById('link-pin-group');
-  const pinInput = document.getElementById('link-pin-code');
-  const displayTitle = document.getElementById('link-modal-display-title');
-  const displayMeta = document.getElementById('link-modal-meta');
 
-  if (!linkDialog) return;
+  if (!linkDialog || !linkForm || !urlInput) return;
 
   urlInput.value = initialUrl;
-  titleInput.value = '';
-  radioPublic.checked = true;
-  radioPin.checked = false;
-  pinGroup.hidden = true;
-  pinInput.value = '';
-
-  function updatePreview() {
-    const rawUrl = urlInput.value.trim();
-    const rawTitle = titleInput.value.trim();
-    if (rawTitle) {
-      displayTitle.textContent = rawTitle;
-    } else if (rawUrl) {
-      displayTitle.textContent = rawUrl;
-    } else {
-      displayTitle.textContent = 'https://example.com';
-    }
-
-    const domain = rawUrl ? extractDomain(normalizeUrl(rawUrl)) : 'Web Link';
-    displayMeta.textContent = `${domain} • Auto-purges after 7 days`;
-  }
-
-  updatePreview();
-
-  urlInput.oninput = updatePreview;
-  titleInput.oninput = updatePreview;
-
-  const handleRadioChange = () => {
-    pinGroup.hidden = !radioPin.checked;
-    if (radioPin.checked) {
-      pinInput.focus();
-    }
-  };
-
-  radioPublic.onchange = handleRadioChange;
-  radioPin.onchange = handleRadioChange;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -726,20 +663,10 @@ function openLinkDialog(initialUrl = '') {
       return;
     }
 
-    let pin = null;
-    if (radioPin.checked) {
-      pin = pinInput.value.trim();
-      if (!pin) {
-        showToast('Please enter a PIN or select Public.', 'error');
-        pinInput.focus();
-        return;
-      }
-    }
-
     linkForm.removeEventListener('submit', handleSubmit);
     linkDialog.close();
 
-    await uploadSingleLink(normalized, titleInput.value.trim(), pin);
+    await uploadSingleLink(normalized);
   };
 
   linkForm.onsubmit = handleSubmit;
@@ -747,18 +674,15 @@ function openLinkDialog(initialUrl = '') {
   linkDialog.showModal();
 
   setTimeout(() => {
-    if (initialUrl) {
-      titleInput.focus();
-    } else {
-      urlInput.focus();
-    }
+    urlInput.focus();
   }, 60);
 }
 
-async function uploadSingleLink(url, title = '', pin = null) {
+async function uploadSingleLink(url) {
   uploadWidget.hidden = false;
   uploadWidgetTitle.textContent = 'Saving Link';
-  widgetFileName.textContent = title || url;
+  const cleanDisplay = url.replace(/^https?:\/\//i, '');
+  widgetFileName.textContent = cleanDisplay;
 
   const tracerBarFill = document.getElementById('tracer-bar-fill');
   const widgetFilePercent = document.getElementById('widget-file-percent');
@@ -778,7 +702,7 @@ async function uploadSingleLink(url, title = '', pin = null) {
   widgetFileIcon.textContent = 'LINK';
 
   try {
-    const uploaded = await dbService.uploadLink(url, title, pin);
+    const uploaded = await dbService.uploadLink(url);
 
     uploadWidgetTitle.textContent = 'Link Saved';
     if (widgetFilePercent) widgetFilePercent.textContent = '100%';
@@ -788,7 +712,7 @@ async function uploadSingleLink(url, title = '', pin = null) {
     if (pulseDot) pulseDot.style.backgroundColor = '#4ade80';
 
     announcePolitely(`Shared link ${uploaded.name} successfully`);
-    showToast(pin ? `Shared link "${uploaded.name}" (PIN Protected)!` : `Shared link "${uploaded.name}" for 7 days!`, 'success');
+    showToast(`Shared link "${uploaded.name}" for 7 days!`, 'success');
 
     const existingIdx = activeFiles.findIndex(f => f.id === uploaded.id);
     if (existingIdx >= 0) {
@@ -901,8 +825,9 @@ function renderFilesTable() {
         </div>`
       : `<div class="row-file-icon ${iconClass}">${label}</div>`;
 
-    const domainBadgeHtml = isItemLink
-      ? `<span class="row-url-domain" title="${escapeHtml(file.downloadUrl)}">${escapeHtml(extractDomain(file.downloadUrl))}</span>`
+    const extractedDom = extractDomain(file.downloadUrl);
+    const domainBadgeHtml = (isItemLink && extractedDom && extractedDom.toLowerCase() !== file.name.trim().toLowerCase())
+      ? `<span class="row-url-domain" title="${escapeHtml(file.downloadUrl)}">${escapeHtml(extractedDom)}</span>`
       : '';
 
     const sizeHtml = isItemLink

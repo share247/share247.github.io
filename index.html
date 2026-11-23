@@ -338,13 +338,11 @@
           <button type="button" class="btn-action-secondary btn-dialog-cancel">Cancel</button>
           <button type="submit" id="btn-confirm-upload" class="btn-action-primary">Upload &amp; Share</button>
         </div>
-
-        <p class="dialog-switch-hint">Need to share a web link instead? <button type="button" class="btn-switch-modal" id="btn-switch-to-link">Share Link &rarr;</button></p>
       </form>
     </div>
   </dialog>
 
-  <!-- Share Link Dialog (URL Sharing with Title & PIN) -->
+  <!-- Share Link Dialog (Simple URL Sharing) -->
   <dialog id="link-dialog" aria-labelledby="link-dialog-title">
     <div class="dialog-box">
       <div class="dialog-header">
@@ -355,7 +353,7 @@
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
             </svg>
           </div>
-          <h3 id="link-dialog-title">Share a Link / URL</h3>
+          <h3 id="link-dialog-title">Share a Link</h3>
         </div>
         <button type="button" class="btn-dialog-close" aria-label="Close dialog">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -370,56 +368,6 @@
         <div class="dialog-field">
           <label for="link-url-input">Destination URL <span class="required-star">*</span></label>
           <input type="text" id="link-url-input" class="dialog-input" placeholder="https://example.com/resource" required autocomplete="off">
-          <p class="dialog-hint">Paste any website, cloud document, video, or online resource link.</p>
-        </div>
-
-        <!-- Optional Title Field -->
-        <div class="dialog-field">
-          <label for="link-title-input">Title / Label <span class="optional-text">(Optional)</span></label>
-          <input type="text" id="link-title-input" class="dialog-input" placeholder="e.g. Project Docs, Video Tutorial" maxlength="255" autocomplete="off">
-          <p class="dialog-hint">Optional descriptive name. If omitted, the link address will be used.</p>
-        </div>
-
-        <!-- Link Preview Card -->
-        <div class="dialog-file-card" id="link-modal-card">
-          <div id="link-modal-badge" class="file-badge icon-type-cyan">LINK</div>
-          <div class="dialog-file-meta">
-            <h4 id="link-modal-display-title">https://example.com</h4>
-            <p id="link-modal-meta">Web Link &bull; Auto-purges after 7 days</p>
-          </div>
-        </div>
-
-        <!-- Access Options (Public vs PIN) -->
-        <div class="dialog-field">
-          <label>Sharing Security</label>
-          <div class="access-options">
-            <label class="access-option-label">
-              <input type="radio" name="link_access_type" value="public" checked id="radio-link-public">
-              <span class="access-option-box">
-                <span class="access-icon">🌐</span>
-                <span class="access-text">
-                  <strong>Public</strong>
-                  <small>Anyone can open immediately</small>
-                </span>
-              </span>
-            </label>
-            <label class="access-option-label">
-              <input type="radio" name="link_access_type" value="pin" id="radio-link-pin">
-              <span class="access-option-box">
-                <span class="access-icon">🔒</span>
-                <span class="access-text">
-                  <strong>PIN Protected</strong>
-                  <small>Requires a PIN code to open</small>
-                </span>
-              </span>
-            </label>
-          </div>
-        </div>
-
-        <div id="link-pin-group" class="dialog-field" hidden>
-          <label for="link-pin-code">Set Security PIN</label>
-          <input type="text" id="link-pin-code" class="pin-input-field" maxlength="12" placeholder="e.g. 1234" autocomplete="off" inputmode="numeric">
-          <p class="dialog-hint">Users on other devices will need to enter this PIN to unlock and view the destination link.</p>
         </div>
 
         <div class="dialog-actions">
@@ -432,8 +380,6 @@
             Save &amp; Share Link
           </button>
         </div>
-
-        <p class="dialog-switch-hint">Need to upload a file instead? <button type="button" class="btn-switch-modal" id="btn-switch-to-upload">Upload File &rarr;</button></p>
       </form>
     </div>
   </dialog>
