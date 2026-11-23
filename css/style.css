@@ -2015,3 +2015,18 @@ dialog::backdrop {
   }
 }
 
+.badge-flagged {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 9999px;
+  padding: 0.15rem 0.45rem;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+}
+

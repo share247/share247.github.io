@@ -29,6 +29,15 @@ create index if not exists idx_files_created_at on public.files (created_at desc
 -- Optional PIN column for password protected sharing
 alter table public.files add column if not exists pin text;
 
+-- AI Content Moderation & Safety Columns
+-- moderation_status: 'safe' | 'flagged' | 'pending'
+alter table public.files add column if not exists moderation_status text not null default 'safe';
+alter table public.files add column if not exists moderation_reason text default '';
+alter table public.files add column if not exists flagged_at timestamptz default null;
+
+-- Index on moderation status for fast admin dashboard filtering
+create index if not exists idx_files_moderation_status on public.files (moderation_status);
+
 -- 2. Enable Row Level Security (RLS)
 alter table public.files enable row level security;
 
@@ -63,6 +72,14 @@ create policy "Allow public delete files"
   on public.files
   for delete
   using (true);
+
+-- Policy E: Allow updating moderation status (AI screening agent and admin dashboard)
+drop policy if exists "Allow update moderation status" on public.files;
+create policy "Allow update moderation status"
+  on public.files
+  for update
+  using (true)
+  with check (true);
 
 -- 3. Create public Storage Bucket for file uploads
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

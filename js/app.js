@@ -5,6 +5,7 @@
  */
 
 import { dbService } from './db.js';
+import { moderationService } from './moderation.js';
 
 // DOM Elements
 const btnNavbarUpload = document.getElementById('btn-navbar-upload');
@@ -624,6 +625,26 @@ async function uploadSingleFile(file, pin = null) {
 
     // Auto open share modal
     openShareDialog(uploaded);
+
+    // Asynchronous background AI safety scan (Gemini API)
+    moderationService.screenItem(uploaded).then((modResult) => {
+      if (modResult.decision === 'NO' || !modResult.safe) {
+        uploaded.moderationStatus = 'flagged';
+        uploaded.moderationReason = modResult.reason;
+        renderFilesTable();
+        showToast(`⚠️ AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
+      }
+    }).catch((e) => console.warn('Moderation error:', e));
+
+    // Asynchronous background AI safety scan (Gemini API)
+    moderationService.screenItem(uploaded, file).then((modResult) => {
+      if (modResult.decision === 'NO' || !modResult.safe) {
+        uploaded.moderationStatus = 'flagged';
+        uploaded.moderationReason = modResult.reason;
+        renderFilesTable();
+        showToast(`⚠️ AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
+      }
+    }).catch((e) => console.warn('Moderation error:', e));
   } catch (err) {
     console.error('Upload failed:', err);
     uploadWidgetTitle.textContent = 'Upload Failed';
@@ -724,6 +745,16 @@ async function uploadSingleLink(url) {
     updateFooterStorageTracker();
 
     openShareDialog(uploaded);
+
+    // Asynchronous background AI safety scan (Gemini API)
+    moderationService.screenItem(uploaded).then((modResult) => {
+      if (modResult.decision === 'NO' || !modResult.safe) {
+        uploaded.moderationStatus = 'flagged';
+        uploaded.moderationReason = modResult.reason;
+        renderFilesTable();
+        showToast(`⚠️ AI Safety Alert: "${uploaded.name}" flagged (${modResult.reason}). Owner notified.`, 'error');
+      }
+    }).catch((e) => console.warn('Moderation error:', e));
   } catch (err) {
     console.error('Link save failed:', err);
     uploadWidgetTitle.textContent = 'Save Failed';
@@ -850,6 +881,7 @@ function renderFilesTable() {
             <span class="row-title-text">${escapeHtml(file.name)}</span>
             ${domainBadgeHtml}
             ${file.hasPin ? `<span class="badge-pin-protected" title="Protected with PIN"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>PIN</span>` : ''}
+            ${file.moderationStatus === 'flagged' ? `<span class="badge-flagged" title="Flagged by AI safety scan: ${escapeHtml(file.moderationReason || 'Prohibited content')}">⚠️ Flagged</span>` : ''}
           </div>
         </div>
       </td>

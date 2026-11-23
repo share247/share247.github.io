@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Share247 — Admin Content Safety & Moderation Console</title>
+  <meta name="description" content="Share247 Admin Console for automated AI content moderation, policy enforcement, and vault management.">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <!-- Master Passcode Auth Gate -->
+  <div id="auth-overlay" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-icon-wrap">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
+      <h2 class="auth-title">Admin Console</h2>
+      <p class="auth-subtitle">Enter your master passcode to access file controls and AI content moderation.</p>
+
+      <form id="auth-form" class="auth-form">
+        <input type="password" id="auth-passcode" class="auth-input" placeholder="Passcode (Default: admin247)" required autocomplete="current-password" autofocus>
+        <button type="submit" class="auth-btn-submit">Unlock Console &rarr;</button>
+        <p id="auth-error" class="auth-error" hidden>⚠️ Incorrect passcode. Please try again.</p>
+      </form>
+      <p class="auth-hint">Protected zone &bull; Default initial passcode: <code>admin247</code></p>
+    </div>
+  </div>
+
+  <!-- Main Admin Shell -->
+  <div class="admin-shell">
+    
+    <!-- Top Bar -->
+    <header class="admin-header">
+      <div class="header-brand">
+        <div class="brand-icon-shield">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+        </div>
+        <div class="brand-meta">
+          <h1>Share247 <span class="badge-admin-tag">Admin &bull; Trust &amp; Safety</span></h1>
+          <p>AI Moderation, Prohibited Content Removal &amp; Vault Supervision</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <a href="./" class="btn-header" title="Go to public vault page">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>Public Vault</span>
+        </a>
+
+        <button type="button" id="btn-refresh" class="btn-header" title="Reload vault items">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6"></path>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+          </svg>
+          <span>Refresh</span>
+        </button>
+
+        <button type="button" id="btn-open-settings" class="btn-header" title="Configure Gemini API &amp; Alerts">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span>AI Settings</span>
+        </button>
+
+        <button type="button" id="btn-logout" class="btn-header btn-header-danger" title="Lock admin session">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Lock</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content Container -->
+    <main class="admin-container">
+
+      <!-- Metrics Grid -->
+      <section class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-info">
+            <p>Total Items in Vault</p>
+            <div id="metric-total-items" class="metric-val">0</div>
+          </div>
+          <div class="metric-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <div class="metric-card card-flagged">
+          <div class="metric-info">
+            <p>Flagged for Removal</p>
+            <div id="metric-flagged-items" class="metric-val">0</div>
+          </div>
+          <div class="metric-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-info">
+            <p>AI Verified Safe</p>
+            <div id="metric-safe-items" class="metric-val">0</div>
+          </div>
+          <div class="metric-icon" style="color: #34d399;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-info">
+            <p>Active Storage Used</p>
+            <div id="metric-storage-used" class="metric-val">0 B</div>
+          </div>
+          <div class="metric-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+              <line x1="6" y1="6" x2="6.01" y2="6"></line>
+              <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- Action Required Alert Banner -->
+      <section id="alert-banner" class="alert-banner" hidden>
+        <div class="alert-banner-left">
+          <div class="alert-pulse-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </div>
+          <div class="alert-banner-text">
+            <h4 id="alert-flagged-count">Prohibited Items Detected</h4>
+            <p>AI Content Moderation flagged items for pornography, abuse, or policy violations. Immediate deletion recommended.</p>
+          </div>
+        </div>
+        <div class="alert-banner-actions">
+          <button type="button" id="btn-alert-delete-all" class="btn-alert-act btn-alert-delete-all">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Delete All Flagged</span>
+          </button>
+          <a href="#" id="btn-alert-mail-owner" class="btn-alert-act btn-alert-mail">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            <span>Email Alert</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- Toolbar & Filters -->
+      <section class="toolbar-section">
+        <div class="filter-tabs">
+          <button class="tab-btn active" data-filter="all" type="button">
+            <span>All Items</span>
+            <span class="tab-count" id="tab-all-count">0</span>
+          </button>
+          <button class="tab-btn tab-danger" data-filter="flagged" type="button">
+            <span>🚨 Flagged</span>
+            <span class="tab-count" id="tab-flagged-count">0</span>
+          </button>
+          <button class="tab-btn" data-filter="safe" type="button">
+            <span>✅ Safe</span>
+            <span class="tab-count" id="tab-safe-count">0</span>
+          </button>
+          <button class="tab-btn" data-filter="files" type="button">
+            <span>Files</span>
+            <span class="tab-count" id="tab-files-count">0</span>
+          </button>
+          <button class="tab-btn" data-filter="links" type="button">
+            <span>Links</span>
+            <span class="tab-count" id="tab-links-count">0</span>
+          </button>
+        </div>
+
+        <div class="toolbar-right">
+          <div class="search-box">
+            <svg class="search-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="admin-search-input" placeholder="Filter by name, URL, or ID...">
+          </div>
+
+          <button type="button" id="btn-scan-all" class="btn-tool btn-tool-scan" title="Run Gemini AI content moderation scan across all files">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path>
+            </svg>
+            <span>AI Scan All</span>
+          </button>
+
+          <button type="button" id="btn-delete-all-flagged" class="btn-tool btn-tool-danger" title="Purge all items marked as flagged">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Purge Flagged</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Table Section -->
+      <section class="table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th style="width: 35%;">Item Name / Destination</th>
+              <th style="width: 25%;">Safety Status &bull; AI Decision</th>
+              <th style="width: 15%;">Size / Type</th>
+              <th style="width: 13%;">Expires In</th>
+              <th style="width: 12%;">Controls</th>
+            </tr>
+          </thead>
+          <tbody id="admin-table-body">
+            <!-- Dynamic rows injected by admin.js -->
+          </tbody>
+        </table>
+
+        <!-- Empty State -->
+        <div id="admin-empty-state" class="admin-empty" hidden>
+          <h3>No items found</h3>
+          <p>There are no active files or links matching the selected filter.</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Settings & Gemini API Modal -->
+  <dialog id="settings-modal" class="admin-modal">
+    <div class="modal-header">
+      <h3>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>AI Moderation &amp; Admin Settings</span>
+      </h3>
+      <button type="button" class="modal-close" aria-label="Close dialog">&times;</button>
+    </div>
+
+    <form id="settings-form">
+      <!-- Gemini API Key -->
+      <div class="modal-field">
+        <label for="setting-gemini-key">Google Gemini API Key (Gemini 2.0 Flash)</label>
+        <div style="display: flex; gap: 0.5rem;">
+          <input type="password" id="setting-gemini-key" placeholder="AIzaSy..." autocomplete="off">
+          <button type="button" id="btn-test-gemini-key" class="btn-modal-cancel" style="flex-shrink: 0;">Test Key</button>
+        </div>
+        <p id="test-key-status" class="modal-hint"></p>
+        <p class="modal-hint">Used for automated multimodal content safety analysis. Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color: #38bdf8;">Google AI Studio</a>.</p>
+      </div>
+
+      <!-- Owner Alert Email -->
+      <div class="modal-field">
+        <label for="setting-admin-email">Owner Notification Email</label>
+        <input type="email" id="setting-admin-email" placeholder="owner@example.com" required>
+        <p class="modal-hint">Automated alert emails and warning reports will be addressed to this mailbox.</p>
+      </div>
+
+      <!-- Alert Webhook -->
+      <div class="modal-field">
+        <label for="setting-webhook-url">Optional Alert Webhook URL</label>
+        <input type="url" id="setting-webhook-url" placeholder="https://webhook.site/... or Discord/Slack Webhook">
+        <p class="modal-hint">Dispatches an instant JSON payload when illegal or adult files are flagged.</p>
+      </div>
+
+      <!-- Change Master Passcode -->
+      <div class="modal-field">
+        <label for="setting-new-passcode">Change Master Passcode</label>
+        <input type="password" id="setting-new-passcode" placeholder="Leave blank to keep current passcode">
+        <p class="modal-hint">Initial default passcode is <code>admin247</code>.</p>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-modal-cancel">Cancel</button>
+        <button type="submit" class="btn-modal-save">Save Settings</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Toast Container -->
+  <div id="admin-toast-container" class="admin-toast-container"></div>
+
+  <!-- Admin Controller -->
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

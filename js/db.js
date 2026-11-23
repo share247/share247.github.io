@@ -89,7 +89,10 @@ class DatabaseService {
       expiresAt: r.expires_at,
       downloadsCount: r.downloads_count,
       hasPin: Boolean(pinVal),
-      pin: pinVal
+      pin: pinVal,
+      moderationStatus: r.moderation_status || 'safe',
+      moderationReason: r.moderation_reason || '',
+      flaggedAt: r.flagged_at || null
     };
   }
 
@@ -477,6 +480,9 @@ class DatabaseService {
             meta.isLink = Boolean(meta.isLink || meta.type === 'url' || meta.extension === 'link');
             meta.formattedSize = meta.isLink ? 'Link' : meta.formattedSize;
             meta.downloadUrl = meta.isLink ? meta.downloadUrl : (blob ? URL.createObjectURL(blob) : '#');
+            meta.moderationStatus = r.moderationStatus || 'safe';
+            meta.moderationReason = r.moderationReason || '';
+            meta.flaggedAt = r.flaggedAt || null;
             return meta;
           })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -502,6 +508,9 @@ class DatabaseService {
         meta.isLink = Boolean(meta.isLink || meta.type === 'url' || meta.extension === 'link');
         meta.formattedSize = meta.isLink ? 'Link' : meta.formattedSize;
         meta.downloadUrl = meta.isLink ? meta.downloadUrl : (blob ? URL.createObjectURL(blob) : '#');
+        meta.moderationStatus = record.moderationStatus || 'safe';
+        meta.moderationReason = record.moderationReason || '';
+        meta.flaggedAt = record.flaggedAt || null;
         resolve(meta);
       };
       req.onerror = () => reject(req.error);
@@ -573,6 +582,52 @@ class DatabaseService {
       return this.incrementSupabaseDownload(fileId);
     }
     return this.incrementLocalDownload(fileId);
+  }
+
+  async updateModerationStatus(fileId, status, reason = '') {
+    const flaggedAt = status === 'flagged' ? new Date().toISOString() : null;
+    if (this.mode === 'supabase') {
+      try {
+        const updatePayload = {
+          moderation_status: status,
+          moderation_reason: reason,
+          flagged_at: flaggedAt
+        };
+        const { data, error } = await this.supabase
+          .from('files')
+          .update(updatePayload)
+          .eq('id', fileId)
+          .select()
+          .single();
+        if (error) {
+          console.warn('Could not update moderation status on Supabase:', error.message || error);
+        }
+        return data ? this.mapSupabaseRecord(data) : null;
+      } catch (err) {
+        console.warn('Supabase moderation update error:', err);
+        return null;
+      }
+    } else {
+      return new Promise((resolve) => {
+        if (!this.idb) return resolve(null);
+        const tx = this.idb.transaction(['files'], 'readwrite');
+        const store = tx.objectStore('files');
+        const req = store.get(fileId);
+        req.onsuccess = () => {
+          const record = req.result;
+          if (record) {
+            record.moderationStatus = status;
+            record.moderationReason = reason;
+            record.flaggedAt = flaggedAt;
+            store.put(record);
+            resolve(record);
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    }
   }
 
   async deleteFile(fileId, storagePath) {

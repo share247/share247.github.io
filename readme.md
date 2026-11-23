@@ -80,7 +80,36 @@ Automated deletion of both storage objects and database records is handled by Po
 
 ---
 
-## 🎨 3. User Interface
+## 🛡 3. AI Content Moderation & Safety (Gemini API)
+
+Share247 features an automated Trust & Safety agent powered by **Google Gemini API** (`gemini-2.0-flash`) and layered heuristic rules:
+
+1. **Immediate Ingestion**: When a user uploads a file or shares a link, it is immediately visible in the public vault.
+2. **Automated Background Screening**:
+   - The AI agent screens files and links for pornography, adult content, Child Sexual Abuse Material (CSAM - zero tolerance), malware/exploits, terrorism, and phishing.
+   - Summarizes the inspection into a structured binary decision:
+     - **`YES`**: Safe for sharing, no sensitive or prohibited issues detected.
+     - **`NO`**: Prohibited content detected with specific classification and rationale.
+3. **Automated Owner Alert**:
+   - When an item receives a `NO` response, it is automatically flagged in the database (`moderation_status = 'flagged'`) and an urgent alert email/webhook notification is generated for the owner with item details and removal instructions.
+
+---
+
+## 👮 4. Admin Dashboard (`share247.github.io/admin`)
+
+Vault administrators can supervise and control public files via the dedicated Admin Console:
+- **Direct Access**: Navigate to `share247.github.io/admin` (or `/admin/` / `/admin.html`).
+- **Master Passcode Protection**: Gated with a secure master passcode (initial default: `admin247`, customizable in AI Settings).
+- **Prohibited Item Management**:
+  - Live filter tabs: `All Items`, `🚨 Flagged Only`, `✅ Safe`, `Files`, and `Links`.
+  - **1-Click Bulk Purge**: Purge all flagged or prohibited items immediately from both database metadata and Supabase storage bucket objects.
+  - **On-Demand AI Audits**: Trigger single-item or bulk Gemini AI content safety scans across the entire vault.
+  - **Manual Overrides**: Toggle flags between Safe and Flagged.
+- **Settings Console**: Configure Google Gemini API keys, owner notification email, and alert webhooks.
+
+---
+
+## 🎨 5. User Interface
 
 - **Top Navbar**: Contains brand title, pill search bar, **+ Upload** file button, **+ Link** button, and connection status indicator.
 - **Drive-Inspired List View**:
