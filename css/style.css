@@ -449,10 +449,9 @@ button {
 }
 
 /* Column Width Allocations */
-.th-name { width: 44%; }
-.th-owner { width: 14%; }
-.th-date { width: 16%; }
-.th-expires { width: 12%; }
+.th-name { width: 50%; }
+.th-date { width: 22%; }
+.th-expires { width: 14%; }
 .th-size { width: 8%; }
 .th-actions { width: 6%; text-align: right; }
 

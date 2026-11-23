@@ -113,7 +113,7 @@ Vault administrators can supervise and control public files via the dedicated Ad
 
 - **Top Navbar**: Contains brand title, pill search bar, **+ Upload** file button, **+ Link** button, and connection status indicator.
 - **Drive-Inspired List View**:
-  - Columns: `Name`, `Owner` (me/avatar), `Date modified`, `Expires in` (7-day countdown badge), `File size` (or `Link` badge), and `Actions`.
+  - Columns: `Name` (website name for links), `Uploaded Time` (`HH:MM • Date`), `Expires in` (7-day countdown badge), `File size` (or `Link` badge), and `Actions`.
   - Row hover actions: Direct **Download / Open**, **Share Link**, and **Details**.
   - Sorting by Name, Date, or Size.
   - Fullscreen drag-and-drop overlay for both files and dropped URLs.

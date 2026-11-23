@@ -74,10 +74,11 @@ class DatabaseService {
     const pinVal = r.pin || (hasPinInType ? decodeURIComponent(rawType.split('; pin=')[1]) : null);
     const cleanType = rawType.split(';')[0];
     const isLink = cleanType === 'url' || cleanType === 'text/x-uri' || r.extension === 'link' || (r.storage_path && r.storage_path.startsWith('link://'));
+    const displayName = isLink ? (this.extractDomain(r.name || r.download_url) || r.name) : r.name;
 
     return {
       id: r.id,
-      name: r.name,
+      name: displayName,
       size: r.size,
       formattedSize: isLink ? 'Link' : r.formatted_size,
       type: cleanType,
@@ -94,6 +95,18 @@ class DatabaseService {
       moderationReason: r.moderation_reason || '',
       flaggedAt: r.flagged_at || null
     };
+  }
+
+  extractDomain(urlStr) {
+    if (!urlStr) return '';
+    try {
+      let u = String(urlStr).trim();
+      if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+      const parsed = new URL(u);
+      return parsed.hostname.replace(/^www\./i, '');
+    } catch (_) {
+      return String(urlStr).replace(/^https?:\/\//i, '').split('/')[0];
+    }
   }
 
   async uploadFileToSupabase(file, onProgress, pin = null) {
@@ -220,7 +233,8 @@ class DatabaseService {
 
   async uploadLinkToSupabase(url, title, pin = null) {
     const linkId = crypto.randomUUID ? crypto.randomUUID() : 'l_' + Date.now().toString(36);
-    const safeTitle = (title || '').trim() || url.replace(/^https?:\/\//i, '');
+    const domainName = this.extractDomain(url);
+    const safeTitle = (title || '').trim() || domainName || url.replace(/^https?:\/\//i, '');
     const displayName = safeTitle.slice(0, 255);
     const storagePath = `link://${linkId}`;
     const now = Date.now();
@@ -430,7 +444,8 @@ class DatabaseService {
 
   async uploadLinkToLocal(url, title, pin = null) {
     const linkId = crypto.randomUUID ? crypto.randomUUID() : 'l_' + Date.now().toString(36);
-    const safeTitle = (title || '').trim() || url.replace(/^https?:\/\//i, '');
+    const domainName = this.extractDomain(url);
+    const safeTitle = (title || '').trim() || domainName || url.replace(/^https?:\/\//i, '');
     const displayName = safeTitle.slice(0, 255);
     const now = Date.now();
     const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
@@ -478,6 +493,9 @@ class DatabaseService {
           .map(r => {
             const { blob, ...meta } = r;
             meta.isLink = Boolean(meta.isLink || meta.type === 'url' || meta.extension === 'link');
+            if (meta.isLink) {
+              meta.name = this.extractDomain(meta.name || meta.downloadUrl) || meta.name;
+            }
             meta.formattedSize = meta.isLink ? 'Link' : meta.formattedSize;
             meta.downloadUrl = meta.isLink ? meta.downloadUrl : (blob ? URL.createObjectURL(blob) : '#');
             meta.moderationStatus = r.moderationStatus || 'safe';
@@ -506,6 +524,9 @@ class DatabaseService {
         }
         const { blob, ...meta } = record;
         meta.isLink = Boolean(meta.isLink || meta.type === 'url' || meta.extension === 'link');
+        if (meta.isLink) {
+          meta.name = this.extractDomain(meta.name || meta.downloadUrl) || meta.name;
+        }
         meta.formattedSize = meta.isLink ? 'Link' : meta.formattedSize;
         meta.downloadUrl = meta.isLink ? meta.downloadUrl : (blob ? URL.createObjectURL(blob) : '#');
         meta.moderationStatus = record.moderationStatus || 'safe';

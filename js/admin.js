@@ -288,19 +288,21 @@ function renderVaultTable() {
     }
 
     const remainingDays = getDaysRemaining(file.expiresAt);
+    const isItemLink = Boolean(file.isLink || file.type === 'url' || file.extension === 'link');
+    const websiteName = isItemLink ? (extractDomain(file.downloadUrl || file.name) || file.name) : file.name;
 
     tr.innerHTML = `
       <td>
         <div class="cell-item">
           <span class="item-badge ${badgeClass}">${label}</span>
           <div class="item-meta">
-            <a href="${escapeHtml(file.downloadUrl)}" target="_blank" rel="noopener noreferrer" class="item-name-link" title="${escapeHtml(file.name)}">
-              ${escapeHtml(file.name)}
+            <a href="${escapeHtml(file.downloadUrl)}" target="_blank" rel="noopener noreferrer" class="item-name-link" title="${escapeHtml(websiteName)}">
+              ${escapeHtml(websiteName)}
             </a>
             <div class="item-subtext">
               <span>ID: ${escapeHtml(file.id.slice(0, 8))}...</span>
               ${file.hasPin ? '<span>🔒 PIN</span>' : ''}
-              ${file.isLink ? `<span>🔗 ${escapeHtml(file.downloadUrl)}</span>` : ''}
+              ${isItemLink ? `<span>🔗 Web Link</span>` : ''}
             </div>
           </div>
         </div>
@@ -563,4 +565,16 @@ function showAdminToast(msg, type = 'info') {
     t.style.opacity = '0';
     setTimeout(() => t.remove(), 250);
   }, 3500);
+}
+
+function extractDomain(urlStr) {
+  if (!urlStr) return '';
+  try {
+    let u = String(urlStr).trim();
+    if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+    const parsed = new URL(u);
+    return parsed.hostname.replace(/^www\./i, '');
+  } catch (_) {
+    return String(urlStr).replace(/^https?:\/\//i, '').split('/')[0];
+  }
 }

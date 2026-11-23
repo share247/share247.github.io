@@ -34,7 +34,6 @@ const colSortSize = document.getElementById('col-sort-size');
 const nameSortArrow = document.getElementById('name-sort-arrow');
 const dateSortArrow = document.getElementById('date-sort-arrow');
 const sizeSortArrow = document.getElementById('size-sort-arrow');
-const thSortMenuBtn = document.getElementById('th-sort-menu-btn');
 
 // Modals
 const shareDialog = document.getElementById('share-dialog');
@@ -274,10 +273,6 @@ function setupEventListeners() {
       });
     }
   });
-
-  if (thSortMenuBtn) {
-    thSortMenuBtn.addEventListener('click', () => cycleSort());
-  }
 
   // Upload widget close
   btnCloseUploadWidget.addEventListener('click', () => {
@@ -702,8 +697,8 @@ function openLinkDialog(initialUrl = '') {
 async function uploadSingleLink(url) {
   uploadWidget.hidden = false;
   uploadWidgetTitle.textContent = 'Saving Link';
-  const cleanDisplay = url.replace(/^https?:\/\//i, '');
-  widgetFileName.textContent = cleanDisplay;
+  const websiteName = extractDomain(url) || url.replace(/^https?:\/\//i, '').split('/')[0];
+  widgetFileName.textContent = websiteName;
 
   const tracerBarFill = document.getElementById('tracer-bar-fill');
   const widgetFilePercent = document.getElementById('widget-file-percent');
@@ -723,7 +718,8 @@ async function uploadSingleLink(url) {
   widgetFileIcon.textContent = 'LINK';
 
   try {
-    const uploaded = await dbService.uploadLink(url);
+    const uploaded = await dbService.uploadLink(url, websiteName);
+    uploaded.name = websiteName;
 
     uploadWidgetTitle.textContent = 'Link Saved';
     if (widgetFilePercent) widgetFilePercent.textContent = '100%';
@@ -732,8 +728,8 @@ async function uploadSingleLink(url) {
     if (tracerEta) tracerEta.textContent = 'Saved';
     if (pulseDot) pulseDot.style.backgroundColor = '#4ade80';
 
-    announcePolitely(`Shared link ${uploaded.name} successfully`);
-    showToast(`Shared link "${uploaded.name}" for 7 days!`, 'success');
+    announcePolitely(`Shared link ${websiteName} successfully`);
+    showToast(`Shared link "${websiteName}" for 7 days!`, 'success');
 
     const existingIdx = activeFiles.findIndex(f => f.id === uploaded.id);
     if (existingIdx >= 0) {
@@ -843,6 +839,7 @@ function renderFilesTable() {
   filtered.forEach((file) => {
     const tr = document.createElement('tr');
     const isItemLink = Boolean(file.isLink || file.type === 'url' || file.extension === 'link');
+    const displayName = isItemLink ? (extractDomain(file.downloadUrl || file.name) || file.name) : file.name;
     const { iconClass, label } = getFileTypeDetails(file.name, isItemLink);
     const { countdownText, badgeStyle } = getCountdownBadgeInfo(file.expiresAt);
     const formattedDate = formatDriveDate(file.createdAt);
@@ -855,11 +852,6 @@ function renderFilesTable() {
           </svg>
         </div>`
       : `<div class="row-file-icon ${iconClass}">${label}</div>`;
-
-    const extractedDom = extractDomain(file.downloadUrl);
-    const domainBadgeHtml = (isItemLink && extractedDom && extractedDom.toLowerCase() !== file.name.trim().toLowerCase())
-      ? `<span class="row-url-domain" title="${escapeHtml(file.downloadUrl)}">${escapeHtml(extractedDom)}</span>`
-      : '';
 
     const sizeHtml = isItemLink
       ? `<span class="badge-link-size">Link</span>`
@@ -877,18 +869,11 @@ function renderFilesTable() {
       <td class="cell-name">
         <div class="cell-name-content">
           ${iconHtml}
-          <div class="row-filename" title="${escapeHtml(file.name)}">
-            <span class="row-title-text">${escapeHtml(file.name)}</span>
-            ${domainBadgeHtml}
+          <div class="row-filename" title="${escapeHtml(displayName)}">
+            <span class="row-title-text">${escapeHtml(displayName)}</span>
             ${file.hasPin ? `<span class="badge-pin-protected" title="Protected with PIN"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>PIN</span>` : ''}
             ${file.moderationStatus === 'flagged' ? `<span class="badge-flagged" title="Flagged by AI safety scan: ${escapeHtml(file.moderationReason || 'Prohibited content')}">⚠️ Flagged</span>` : ''}
           </div>
-        </div>
-      </td>
-      <td class="cell-owner">
-        <div class="cell-owner-content">
-          <div class="owner-avatar" aria-hidden="true">me</div>
-          <span class="owner-name">me</span>
         </div>
       </td>
       <td class="cell-date">${formattedDate}</td>
@@ -1091,7 +1076,8 @@ function openPinModal(file, onUnlocked) {
     if (pinDialogDesc) pinDialogDesc.textContent = 'This link is secured with an access PIN. Enter the PIN to unlock and open.';
     pinModalBadge.className = 'file-badge icon-type-cyan';
     pinModalBadge.textContent = 'LINK';
-    pinModalName.textContent = file.name;
+    const websiteName = extractDomain(file.downloadUrl || file.name) || file.name;
+    pinModalName.textContent = websiteName;
     pinModalMeta.textContent = 'Web Link • 🔒 PIN Protected';
     if (pinSubmitText) pinSubmitText.textContent = 'Unlock & Open';
   } else {
@@ -1206,7 +1192,8 @@ function openShareDialog(file) {
 
   shareModalIconBadge.className = `file-badge ${iconClass}`;
   shareModalIconBadge.textContent = label;
-  shareModalName.textContent = file.name;
+  const displayName = isLink ? (extractDomain(file.downloadUrl || file.name) || file.name) : file.name;
+  shareModalName.textContent = displayName;
   shareModalSize.textContent = `${isLink ? 'Web Link' : (file.formattedSize || dbService.formatBytes(file.size))}${file.hasPin ? ' • 🔒 PIN Protected' : ''}`;
   shareModalExpires.textContent = `Auto-purges in ${countdownText}`;
 
@@ -1384,16 +1371,16 @@ function getCountdownBadgeInfo(expiresAtStr) {
 function formatDriveDate(isoStr) {
   if (!isoStr) return '';
   const d = new Date(isoStr);
-  const now = new Date();
-  const sameYear = d.getFullYear() === now.getFullYear();
+
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const timeStr = `${hours}:${minutes}`;
 
   const month = d.toLocaleString('en-US', { month: 'short' });
   const day = d.getDate();
+  const year = d.getFullYear();
 
-  if (sameYear) {
-    return `${month} ${day}`;
-  }
-  return `${month} ${day}, ${d.getFullYear()}`;
+  return `${timeStr} • ${month} ${day}, ${year}`;
 }
 
 function escapeHtml(str) {
