@@ -888,15 +888,18 @@ function renderFilesTable() {
       ? `<button class="row-action-btn btn-open-link" data-id="${file.id}" type="button" title="Open destination link" aria-label="Open Link">
            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
          </button>`
-      : `<button class="row-action-btn btn-download" data-id="${file.id}" type="button" title="Download" aria-label="Download">
+      : `<button class="row-action-btn btn-preview" data-id="${file.id}" type="button" title="Preview / Open" aria-label="Preview">
+           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+         </button>
+         <button class="row-action-btn btn-download" data-id="${file.id}" type="button" title="Download" aria-label="Download">
            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
          </button>`;
 
     tr.innerHTML = `
       <td class="cell-name">
-        <div class="cell-name-content">
+        <div class="cell-name-content" style="cursor: pointer;" title="Click to preview & open ${escapeHtml(displayName)}">
           ${iconHtml}
-          <div class="row-filename" title="${escapeHtml(displayName)}">
+          <div class="row-filename">
             <span class="row-title-text">${escapeHtml(displayName)}</span>
             ${file.hasPin ? `<span class="badge-pin-protected" title="Protected with PIN"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>PIN</span>` : ''}
             ${file.moderationStatus === 'flagged' ? `<span class="badge-flagged" title="Flagged by AI safety scan: ${escapeHtml(file.moderationReason || 'Prohibited content')}">⚠️ Flagged</span>` : ''}
@@ -924,7 +927,23 @@ function renderFilesTable() {
       </td>
     `;
 
-    // Action handlers
+    // Action handlers: click on filename opens preview
+    const nameContent = tr.querySelector('.cell-name-content');
+    if (nameContent) {
+      nameContent.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFilePreview(file);
+      });
+    }
+
+    const btnPreview = tr.querySelector('.btn-preview');
+    if (btnPreview) {
+      btnPreview.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openFilePreview(file);
+      });
+    }
+
     const btnDownload = tr.querySelector('.btn-download');
     if (btnDownload) {
       btnDownload.addEventListener('click', (e) => {
@@ -937,7 +956,7 @@ function renderFilesTable() {
     if (btnOpenLink) {
       btnOpenLink.addEventListener('click', (e) => {
         e.stopPropagation();
-        handleDownloadAttempt(file);
+        openFilePreview(file);
       });
     }
 
@@ -952,11 +971,7 @@ function renderFilesTable() {
     });
 
     tr.addEventListener('dblclick', () => {
-      if (isItemLink) {
-        handleDownloadAttempt(file);
-      } else {
-        openShareDialog(file);
-      }
+      openFilePreview(file);
     });
 
     filesTbody.appendChild(tr);
@@ -1162,7 +1177,26 @@ async function triggerDownload(file) {
     try {
       // Fetch as blob to guarantee cross-origin download attribute is honored by browser
       const response = await fetch(file.downloadUrl, { mode: 'cors' });
-      if (!response.ok) throw new Error('Blob fetch failed');
+      if (!response.ok) {
+        if (response.status === 404) {
+          showToast(`⚠️ File "${file.name}" was not found in storage (NoSuchKey / 404).`, 'error');
+          openFilePreview(file);
+          return;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      // Intercept Supabase Storage NoSuchKey JSON response
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const errJson = await response.clone().json().catch(() => null);
+        if (errJson && (errJson.code === 'NoSuchKey' || errJson.statusCode === '404' || errJson.error === 'not_found')) {
+          showToast(`⚠️ File "${file.name}" is no longer available in cloud storage.`, 'error');
+          openFilePreview(file);
+          return;
+        }
+      }
+
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
 
@@ -1174,17 +1208,10 @@ async function triggerDownload(file) {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
       showToast(`Downloading "${file.name}"...`, 'success');
-    } catch (blobErr) {
-      // Fallback for direct link navigation
-      const a = document.createElement('a');
-      a.href = file.downloadUrl;
-      a.download = file.name;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      showToast(`Downloading "${file.name}"...`);
+    } catch (fetchErr) {
+      console.warn('Direct blob fetch failed, inspecting error:', fetchErr);
+      // Pre-check with openFilePreview which displays the interactive recovery view
+      openFilePreview(file);
     }
   } catch (err) {
     console.error('Download error:', err);
@@ -1268,6 +1295,15 @@ function openShareDialog(file) {
     }
   }
 
+  const btnModalPreview = document.getElementById('btn-modal-preview');
+  if (btnModalPreview) {
+    btnModalPreview.onclick = (e) => {
+      e.preventDefault();
+      shareDialog.close();
+      openFilePreview(file);
+    };
+  }
+
   const shareUrl = `${window.location.origin}${window.location.pathname}?file=${encodeURIComponent(file.id)}`;
   shareUrlInput.value = shareUrl;
 
@@ -1279,6 +1315,529 @@ function openShareDialog(file) {
   };
 
   shareDialog.showModal();
+}
+
+// ==========================================
+// RICH IN-APP FILE & DOCUMENT PREVIEW SUITE
+// ==========================================
+
+async function openFilePreview(file) {
+  // If item requires PIN and has not been unlocked in this session
+  if (file.hasPin && !unlockedFileIds.has(file.id)) {
+    openPinModal(file, () => openFilePreview(file));
+    return;
+  }
+
+  const previewModal = document.getElementById('preview-modal');
+  const previewModalTitle = document.getElementById('preview-modal-title');
+  const previewModalMeta = document.getElementById('preview-modal-meta');
+  const previewModalBadge = document.getElementById('preview-modal-badge');
+  const previewDirectOpen = document.getElementById('btn-preview-direct-open');
+  const previewDirectLabel = document.getElementById('preview-direct-label');
+  const btnPreviewDownload = document.getElementById('btn-preview-download');
+  const previewContentArea = document.getElementById('preview-content-area');
+  const btnPreviewClose = document.getElementById('btn-preview-close');
+
+  if (!previewModal || !previewContentArea) return;
+
+  const isItemLink = Boolean(file.isLink || file.type === 'url' || file.extension === 'link');
+  const displayName = isItemLink ? (extractDomain(file.downloadUrl || file.name) || file.name) : file.name;
+  const { iconClass, label } = getFileTypeDetails(file.name, isItemLink);
+
+  previewModalBadge.className = `file-badge ${iconClass}`;
+  previewModalBadge.textContent = label;
+  previewModalTitle.textContent = displayName;
+  previewModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • ${isItemLink ? 'Web Link' : (file.extension || 'file').toUpperCase()}`;
+
+  if (previewDirectOpen) {
+    previewDirectOpen.href = file.downloadUrl;
+    if (previewDirectLabel) {
+      previewDirectLabel.textContent = isItemLink ? 'Visit Site' : 'Direct Link';
+    }
+  }
+
+  if (btnPreviewDownload) {
+    if (isItemLink) {
+      btnPreviewDownload.hidden = true;
+    } else {
+      btnPreviewDownload.hidden = false;
+      btnPreviewDownload.onclick = () => triggerDownload(file);
+    }
+  }
+
+  btnPreviewClose.onclick = () => previewModal.close();
+
+  // Show loading spinner initially
+  previewContentArea.innerHTML = `
+    <div class="preview-spinner-wrap">
+      <div class="loader-glow-ring"></div>
+      <p>Loading interactive preview...</p>
+    </div>
+  `;
+
+  previewModal.showModal();
+
+  // If it's a web link:
+  if (isItemLink) {
+    renderLinkPreview(file, previewContentArea);
+    return;
+  }
+
+  const ext = (file.extension || '').toLowerCase().replace(/^\./, '');
+  const mime = (file.type || '').toLowerCase();
+
+  // 1. EXCEL SPREADSHEET (.xlsx, .xls, .csv, .tsv) -> Excel row-column view only
+  if (['xlsx', 'xls', 'csv', 'tsv'].includes(ext) || mime.includes('spreadsheet') || mime.includes('excel') || mime.includes('csv')) {
+    await renderExcelSpreadsheetPreview(file, previewContentArea, previewModal);
+    return;
+  }
+
+  // 2. IMAGE (.png, .jpg, .jpeg, .gif, .webp, .svg, .bmp, .ico, .avif) -> Open as Image
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'].includes(ext) || mime.startsWith('image/')) {
+    renderImagePreview(file, previewContentArea, previewModal);
+    return;
+  }
+
+  // 3. PDF (.pdf) -> Open as PDF
+  if (ext === 'pdf' || mime === 'application/pdf') {
+    renderPdfPreview(file, previewContentArea, previewModal);
+    return;
+  }
+
+  // 4. POWERPOINT & DOCS (.ppt, .pptx, .doc, .docx, .odt, .rtf) -> Open as Presentation/Doc
+  if (['ppt', 'pptx', 'doc', 'docx', 'odt', 'rtf'].includes(ext) || mime.includes('word') || mime.includes('presentation') || mime.includes('powerpoint')) {
+    renderOfficeDocPreview(file, previewContentArea, previewModal);
+    return;
+  }
+
+  // 5. TEXT & CODE (.txt, .cpp, .c, .h, .py, .js, .json, .html, .css, .md, .java, etc.) -> Open as Text
+  if (isTextOrCodeExtension(ext) || mime.startsWith('text/') || mime.includes('json') || mime.includes('javascript')) {
+    await renderTextCodePreview(file, previewContentArea, previewModal);
+    return;
+  }
+
+  // 6. AUDIO / VIDEO
+  if (['mp4', 'webm', 'ogv', 'mov', 'mp3', 'wav', 'ogg', 'm4a'].includes(ext) || mime.startsWith('video/') || mime.startsWith('audio/')) {
+    renderMediaPreview(file, previewContentArea, previewModal);
+    return;
+  }
+
+  // 7. Generic / Binary Archive (.zip, .rar, etc.)
+  renderGenericPreview(file, previewContentArea);
+}
+
+// 1. Excel Row-Column Spreadsheet Renderer
+async function renderExcelSpreadsheetPreview(file, container, modal) {
+  try {
+    const ext = (file.extension || '').toLowerCase().replace(/^\./, '');
+    let sheetsMap = {};
+    let sheetNames = [];
+
+    const response = await fetch(file.downloadUrl);
+    if (!response.ok) {
+      if (response.status === 404) {
+        renderMissingObjectError(file, container, modal);
+        return;
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const errJson = await response.clone().json().catch(() => null);
+      if (errJson && (errJson.code === 'NoSuchKey' || errJson.statusCode === '404' || errJson.error === 'not_found')) {
+        renderMissingObjectError(file, container, modal);
+        return;
+      }
+    }
+
+    if (ext === 'csv' || ext === 'tsv') {
+      const text = await response.text();
+      const delimiter = ext === 'tsv' ? '\t' : ',';
+      const rows = parseDelimitedText(text, delimiter);
+      sheetsMap['Sheet1'] = rows;
+      sheetNames = ['Sheet1'];
+    } else {
+      const buffer = await response.arrayBuffer();
+      if (window.XLSX && typeof window.XLSX.read === 'function') {
+        const workbook = window.XLSX.read(buffer, { type: 'array' });
+        sheetNames = workbook.SheetNames || ['Sheet1'];
+        sheetNames.forEach((sName) => {
+          const ws = workbook.Sheets[sName];
+          const sheetData = window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+          sheetsMap[sName] = sheetData;
+        });
+      } else {
+        container.innerHTML = `
+          <iframe class="preview-frame" src="https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(file.downloadUrl)}" title="${escapeHtml(file.name)}"></iframe>
+        `;
+        return;
+      }
+    }
+
+    let activeSheet = sheetNames[0] || 'Sheet1';
+
+    function buildExcelUI() {
+      const rawRows = sheetsMap[activeSheet] || [];
+      let maxCols = 0;
+      rawRows.forEach((r) => {
+        if (Array.isArray(r) && r.length > maxCols) maxCols = r.length;
+      });
+      maxCols = Math.max(maxCols, 6);
+
+      container.innerHTML = `
+        <div class="preview-excel-container">
+          <div class="excel-toolbar">
+            <div class="excel-tabs-wrap">
+              ${sheetNames.map(s => `
+                <button type="button" class="excel-sheet-tab ${s === activeSheet ? 'active' : ''}" data-sheet="${escapeHtml(s)}">
+                  📊 ${escapeHtml(s)}
+                </button>
+              `).join('')}
+            </div>
+            <div class="excel-controls-right">
+              <div class="excel-search-box">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" class="excel-search-input" placeholder="Search rows..." id="excel-filter-input">
+              </div>
+              <span class="excel-grid-meta" id="excel-grid-meta">${rawRows.length} rows &times; ${maxCols} cols</span>
+            </div>
+          </div>
+          <div class="excel-scroll-area">
+            <table class="excel-table">
+              <thead>
+                <tr>
+                  <th class="excel-corner">#</th>
+                  ${Array.from({ length: maxCols }, (_, i) => `<th class="excel-col-head">${getExcelColumnLabel(i)}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody id="excel-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      renderExcelRows(rawRows, maxCols, '');
+
+      container.querySelectorAll('.excel-sheet-tab').forEach((tabBtn) => {
+        tabBtn.addEventListener('click', () => {
+          activeSheet = tabBtn.getAttribute('data-sheet');
+          buildExcelUI();
+        });
+      });
+
+      const searchInput = container.querySelector('#excel-filter-input');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          renderExcelRows(rawRows, maxCols, e.target.value.trim().toLowerCase());
+        });
+      }
+    }
+
+    function renderExcelRows(rows, colsCount, query) {
+      const tbody = container.querySelector('#excel-tbody');
+      const meta = container.querySelector('#excel-grid-meta');
+      if (!tbody) return;
+
+      tbody.innerHTML = '';
+      let visibleCount = 0;
+
+      rows.forEach((row, rowIdx) => {
+        const rowVals = Array.isArray(row) ? row : [];
+        const rowText = rowVals.map(c => String(c ?? '')).join(' ').toLowerCase();
+
+        if (query && !rowText.includes(query)) return;
+        visibleCount++;
+
+        const tr = document.createElement('tr');
+        let cellsHtml = `<td class="excel-row-num">${rowIdx + 1}</td>`;
+
+        for (let colIdx = 0; colIdx < colsCount; colIdx++) {
+          const val = rowVals[colIdx] != null ? String(rowVals[colIdx]) : '';
+          cellsHtml += `<td class="excel-cell" title="${escapeHtml(val)}">${escapeHtml(val)}</td>`;
+        }
+
+        tr.innerHTML = cellsHtml;
+        tbody.appendChild(tr);
+      });
+
+      if (meta) {
+        meta.textContent = `${visibleCount} of ${rows.length} rows • ${colsCount} cols`;
+      }
+    }
+
+    buildExcelUI();
+
+  } catch (err) {
+    console.warn('Excel parse failed, falling back:', err);
+    container.innerHTML = `
+      <iframe class="preview-frame" src="https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(file.downloadUrl)}" title="${escapeHtml(file.name)}"></iframe>
+    `;
+  }
+}
+
+// 2. Image Lightbox Renderer
+function renderImagePreview(file, container, modal) {
+  let scale = 1.0;
+
+  container.innerHTML = `
+    <div class="preview-image-container">
+      <img src="${file.downloadUrl}" class="preview-image-elem" id="preview-img-target" alt="${escapeHtml(file.name)}">
+      <div class="preview-image-toolbar">
+        <button type="button" class="preview-img-btn" id="btn-zoom-out" title="Zoom Out">&minus; Zoom</button>
+        <button type="button" class="preview-img-btn" id="btn-zoom-reset" title="Original Size">100%</button>
+        <button type="button" class="preview-img-btn" id="btn-zoom-in" title="Zoom In">&plus; Zoom</button>
+        <button type="button" class="preview-img-btn" id="btn-zoom-fit" title="Fit to Screen">Fit</button>
+      </div>
+    </div>
+  `;
+
+  const img = container.querySelector('#preview-img-target');
+  const btnZoomOut = container.querySelector('#btn-zoom-out');
+  const btnZoomReset = container.querySelector('#btn-zoom-reset');
+  const btnZoomIn = container.querySelector('#btn-zoom-in');
+  const btnZoomFit = container.querySelector('#btn-zoom-fit');
+
+  img.onerror = () => {
+    renderMissingObjectError(file, container, modal);
+  };
+
+  function updateZoom() {
+    if (img) img.style.transform = `scale(${scale})`;
+  }
+
+  btnZoomOut.onclick = () => { scale = Math.max(0.3, scale - 0.2); updateZoom(); };
+  btnZoomIn.onclick = () => { scale = Math.min(3.5, scale + 0.2); updateZoom(); };
+  btnZoomReset.onclick = () => { scale = 1.0; updateZoom(); };
+  btnZoomFit.onclick = () => { scale = 1.0; img.style.maxWidth = '92%'; img.style.maxHeight = '80vh'; updateZoom(); };
+}
+
+// 3. PDF Document Renderer
+function renderPdfPreview(file, container, modal) {
+  container.innerHTML = `
+    <iframe class="preview-frame" src="${file.downloadUrl}#toolbar=1&navpanes=1" title="${escapeHtml(file.name)}"></iframe>
+  `;
+}
+
+// 4. Microsoft Office & Google Docs Renderer
+function renderOfficeDocPreview(file, container, modal) {
+  const officeUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(file.downloadUrl)}`;
+  const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(file.downloadUrl)}&embedded=true`;
+
+  container.innerHTML = `
+    <iframe class="preview-frame" src="${officeUrl}" title="${escapeHtml(file.name)}" onerror="this.src='${googleViewerUrl}'"></iframe>
+  `;
+}
+
+// 5. Text & Code Renderer
+async function renderTextCodePreview(file, container, modal) {
+  try {
+    const response = await fetch(file.downloadUrl);
+    if (!response.ok) {
+      if (response.status === 404) {
+        renderMissingObjectError(file, container, modal);
+        return;
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const text = await response.text();
+    if (text.includes('"NoSuchKey"') && text.includes('"statusCode":"404"')) {
+      renderMissingObjectError(file, container, modal);
+      return;
+    }
+
+    const lines = text.split('\n');
+    const lineNumbersHtml = lines.map((_, idx) => `<span class="code-gutter-line">${idx + 1}</span>`).join('');
+
+    container.innerHTML = `
+      <div class="preview-code-container">
+        <div class="code-toolbar">
+          <div class="code-toolbar-info">
+            <span class="file-badge icon-type-blue">${(file.extension || 'TXT').toUpperCase()}</span>
+            <span>${lines.length} lines • ${file.formattedSize || dbService.formatBytes(file.size)}</span>
+          </div>
+          <button type="button" class="btn-code-copy" id="btn-copy-code-text">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <span id="copy-code-label">Copy Text</span>
+          </button>
+        </div>
+        <div class="code-viewport">
+          <div class="code-gutter">${lineNumbersHtml}</div>
+          <pre class="code-pre"><code>${escapeHtml(text)}</code></pre>
+        </div>
+      </div>
+    `;
+
+    const btnCopy = container.querySelector('#btn-copy-code-text');
+    const labelCopy = container.querySelector('#copy-code-label');
+    if (btnCopy) {
+      btnCopy.onclick = () => {
+        copyTextToClipboard(text, 'File text copied to clipboard!');
+        if (labelCopy) labelCopy.textContent = 'Copied! ✓';
+        setTimeout(() => { if (labelCopy) labelCopy.textContent = 'Copy Text'; }, 2000);
+      };
+    }
+  } catch (err) {
+    console.error('Failed to load text preview:', err);
+    renderMissingObjectError(file, container, modal);
+  }
+}
+
+// 6. Link Destination Card Renderer
+function renderLinkPreview(file, container) {
+  const url = file.downloadUrl || '#';
+  const website = extractDomain(url) || file.name;
+
+  container.innerHTML = `
+    <div class="preview-link-card">
+      <div class="preview-link-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+      </div>
+      <h3 class="preview-link-title">${escapeHtml(website)}</h3>
+      <div class="preview-link-url-box">
+        <span>${escapeHtml(url)}</span>
+      </div>
+      <p style="color: #94a3b8; font-size: 0.8125rem; margin: 0;">Shared public link • Click below to visit destination website</p>
+      <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="preview-link-btn-launch">
+        <span>Open Website</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+      </a>
+    </div>
+  `;
+}
+
+// 7. Audio / Video Media Player
+function renderMediaPreview(file, container, modal) {
+  const ext = (file.extension || '').toLowerCase().replace(/^\./, '');
+  const isVideo = ['mp4', 'webm', 'ogv', 'mov'].includes(ext) || (file.type || '').startsWith('video/');
+
+  container.innerHTML = `
+    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 2rem;">
+      ${isVideo
+        ? `<video controls autoplay style="max-width: 90%; max-height: 80vh; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.6);" src="${file.downloadUrl}"></video>`
+        : `<audio controls autoplay style="width: 480px; max-width: 90%;" src="${file.downloadUrl}"></audio>`}
+    </div>
+  `;
+}
+
+// 8. Generic / Archive File Renderer
+function renderGenericPreview(file, container) {
+  const { iconClass, label } = getFileTypeDetails(file.name);
+
+  container.innerHTML = `
+    <div class="preview-link-card" style="border-color: rgba(255, 255, 255, 0.15);">
+      <div class="preview-link-icon" style="background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); color: #cbd5e1;">
+        <span class="file-badge ${iconClass}" style="font-size: 1.1rem; padding: 0.5rem 0.8rem;">${label}</span>
+      </div>
+      <h3 class="preview-link-title">${escapeHtml(file.name)}</h3>
+      <p style="color: #94a3b8; font-size: 0.875rem; margin: 0;">${file.formattedSize || dbService.formatBytes(file.size)} &bull; ${file.extension ? file.extension.toUpperCase() : 'Archive'}</p>
+      <button type="button" class="preview-link-btn-launch" id="btn-generic-download">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span>Download File</span>
+      </button>
+    </div>
+  `;
+
+  const btnDl = container.querySelector('#btn-generic-download');
+  if (btnDl) btnDl.onclick = () => triggerDownload(file);
+}
+
+// 9. Error Card for Missing File Object (NoSuchKey / 404 Recovery)
+function renderMissingObjectError(file, container, modal) {
+  container.innerHTML = `
+    <div class="preview-error-state">
+      <div class="preview-error-icon-box">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </div>
+      <h3>File Object Not Found (404 NoSuchKey)</h3>
+      <p>The file object "<strong>${escapeHtml(file.name)}</strong>" does not exist in Supabase storage bucket. It may have expired, been purged by an administrator, or had its storage object removed.</p>
+      <div class="preview-error-actions">
+        <button type="button" class="btn-error-purge" id="btn-purge-stale-entry">Remove From Vault List</button>
+        <button type="button" class="btn-error-close" id="btn-close-missing-modal">Dismiss</button>
+      </div>
+    </div>
+  `;
+
+  const btnPurge = container.querySelector('#btn-purge-stale-entry');
+  const btnClose = container.querySelector('#btn-close-missing-modal');
+
+  if (btnClose) btnClose.onclick = () => modal.close();
+
+  if (btnPurge) {
+    btnPurge.onclick = async () => {
+      try {
+        btnPurge.textContent = 'Removing...';
+        btnPurge.disabled = true;
+        await dbService.deleteFile(file.id, file.storagePath);
+        activeFiles = activeFiles.filter(f => f.id !== file.id);
+        renderFilesTable();
+        modal.close();
+        showToast(`Stale entry "${file.name}" removed from vault.`, 'info');
+      } catch (err) {
+        console.error('Failed to remove stale entry:', err);
+        showToast('Could not remove entry: ' + (err.message || err), 'error');
+        modal.close();
+      }
+    };
+  }
+}
+
+function getExcelColumnLabel(colIndex) {
+  let temp = colIndex;
+  let letter = '';
+  while (temp >= 0) {
+    letter = String.fromCharCode((temp % 26) + 65) + letter;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return letter;
+}
+
+function parseDelimitedText(text, delimiter = ',') {
+  const lines = text.split(/\r\n|\n|\r/);
+  const rows = [];
+  for (const line of lines) {
+    if (!line && rows.length === 0) continue;
+    const cells = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+      } else if (ch === delimiter && !inQuotes) {
+        cells.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    cells.push(cur.trim());
+    if (cells.some(c => c !== '')) {
+      rows.push(cells);
+    }
+  }
+  return rows;
+}
+
+function isTextOrCodeExtension(ext) {
+  const codeExts = new Set([
+    'txt', 'text', 'md', 'markdown', 'json', 'xml', 'html', 'htm', 'css', 'scss',
+    'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs',
+    'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh',
+    'py', 'java', 'go', 'rs', 'php', 'rb', 'sh', 'bash', 'zsh',
+    'sql', 'yaml', 'yml', 'env', 'ini', 'conf', 'log'
+  ]);
+  return codeExts.has((ext || '').toLowerCase());
+}
 }
 
 async function checkUrlQueryParams() {

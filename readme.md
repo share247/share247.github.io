@@ -99,7 +99,7 @@ Share247 features an automated Trust & Safety agent powered by **Google Gemini A
 
 Vault administrators can supervise and control public files via the dedicated Admin Console:
 - **Direct Access**: Navigate to `share247.github.io/admin` (or `/admin/` / `/admin.html`).
-- **Master Passcode Protection**: Gated with a secure master passcode (master passcode: `JustCse188#`, customizable in AI Settings).
+- **Master Passcode Protection**: Gated with a secure master passcode (customizable in AI Settings).
 - **Prohibited Item Management**:
   - Live filter tabs: `All Items`, `🚨 Flagged Only`, `✅ Safe`, `Files`, and `Links`.
   - **1-Click Bulk Purge**: Purge all flagged or prohibited items immediately from both database metadata and Supabase storage bucket objects.

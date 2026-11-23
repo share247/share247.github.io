@@ -379,6 +379,24 @@ function renderVaultTable() {
     const btnDel = tr.querySelector('.btn-del');
     btnDel.addEventListener('click', () => handleDeleteSingleItem(file));
 
+    // Handle 404 NoSuchKey object protection in admin
+    const openLink = tr.querySelector('.item-name-link');
+    const btnPreviewLink = tr.querySelector('a.action-btn');
+
+    const handleItemOpen = async (e) => {
+      if (isItemLink) return;
+      try {
+        const resp = await fetch(file.downloadUrl, { method: 'HEAD' }).catch(() => null);
+        if (resp && resp.status === 404) {
+          e.preventDefault();
+          showAdminToast(`⚠️ File "${file.name}" object is missing from storage (404 NoSuchKey). Delete this dead record using the trash button.`, 'error');
+        }
+      } catch (_) {}
+    };
+
+    if (openLink) openLink.addEventListener('click', handleItemOpen);
+    if (btnPreviewLink) btnPreviewLink.addEventListener('click', handleItemOpen);
+
     adminTableBody.appendChild(tr);
   });
 }
