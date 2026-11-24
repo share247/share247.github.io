@@ -222,6 +222,29 @@ function setupEventListeners() {
       testKeyStatus.style.color = '#f87171';
     }
   });
+
+  // Cross-Tab Broadcast Channel (live-sync views and changes from public vault)
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const syncChannel = new BroadcastChannel('share247_vault_sync');
+      syncChannel.addEventListener('message', (e) => {
+        if (e.data && e.data.action === 'view_increment' && e.data.payload) {
+          const { fileId, count } = e.data.payload;
+          const target = allVaultFiles.find(f => String(f.id) === String(fileId));
+          if (target) {
+            target.downloadsCount = Math.max(Number(target.downloadsCount) || 0, Number(count) || 0);
+            const row = adminTableBody.querySelector(`tr[data-file-id="${fileId}"]`);
+            if (row) {
+              const viewSpan = row.querySelector('.admin-views-count');
+              if (viewSpan) viewSpan.textContent = target.downloadsCount;
+              const viewCell = row.querySelector('.admin-views-cell');
+              if (viewCell) viewCell.title = `${target.downloadsCount} views`;
+            }
+          }
+        }
+      });
+    }
+  } catch (_) {}
 }
 
 // ==========================================
@@ -358,6 +381,8 @@ function renderVaultTable() {
     const isItemLink = Boolean(file.isLink || file.type === 'url' || file.extension === 'link');
     const websiteName = isItemLink ? (extractDomain(file.downloadUrl || file.name) || file.name) : file.name;
 
+    tr.dataset.fileId = String(file.id);
+
     tr.innerHTML = `
       <td>
         <div class="cell-item">
@@ -381,9 +406,9 @@ function renderVaultTable() {
         <span style="color: #cbd5e1;">${file.isLink ? 'Web Link' : (file.formattedSize || dbService.formatBytes(file.size))}</span>
       </td>
       <td>
-        <span style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: #94a3b8;" title="${file.downloadsCount || 0} views">
+        <span class="admin-views-cell" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; color: #94a3b8;" title="${file.downloadsCount || 0} views">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-          <span>${file.downloadsCount || 0}</span>
+          <span class="admin-views-count">${file.downloadsCount || 0}</span>
         </span>
       </td>
       <td>
@@ -425,6 +450,7 @@ function renderVaultTable() {
     const btnPreviewLink = tr.querySelector('a.action-btn');
 
     const handleItemOpen = async (e) => {
+      recordAdminFileView(file);
       if (isItemLink) return;
       try {
         const resp = await fetch(file.downloadUrl, { method: 'HEAD' }).catch(() => null);
@@ -440,6 +466,40 @@ function renderVaultTable() {
 
     adminTableBody.appendChild(tr);
   });
+}
+
+// Track visited file timestamps in admin to prevent duplicate rapid increments
+const recentlyViewedAdminFiles = new Map();
+
+async function recordAdminFileView(file) {
+  if (!file || !file.id) return;
+  const strId = String(file.id);
+  const now = Date.now();
+  const lastTime = recentlyViewedAdminFiles.get(strId) || 0;
+  if (now - lastTime < 1500) return;
+  recentlyViewedAdminFiles.set(strId, now);
+
+  try {
+    file.downloadsCount = (Number(file.downloadsCount) || 0) + 1;
+    const row = adminTableBody.querySelector(`tr[data-file-id="${strId}"]`);
+    if (row) {
+      const viewSpan = row.querySelector('.admin-views-count');
+      if (viewSpan) viewSpan.textContent = file.downloadsCount;
+      const viewCell = row.querySelector('.admin-views-cell');
+      if (viewCell) viewCell.title = `${file.downloadsCount} views`;
+    }
+    const newCount = await dbService.incrementDownload(file.id);
+    if (newCount && newCount > file.downloadsCount) {
+      file.downloadsCount = newCount;
+      const row = adminTableBody.querySelector(`tr[data-file-id="${strId}"]`);
+      if (row) {
+        const viewSpan = row.querySelector('.admin-views-count');
+        if (viewSpan) viewSpan.textContent = file.downloadsCount;
+      }
+    }
+  } catch (err) {
+    console.warn('Share247: recordAdminFileView error:', err);
+  }
 }
 
 // ==========================================

@@ -112,6 +112,14 @@ async function initApp() {
             activeFiles = activeFiles.filter(f => String(f.id) !== delId);
             renderFilesTable();
             updateFooterStorageTracker();
+          } else if (e.data && e.data.action === 'view_increment' && e.data.payload) {
+            const { fileId, count } = e.data.payload;
+            const target = activeFiles.find(f => String(f.id) === String(fileId));
+            if (target) {
+              target.downloadsCount = Math.max(Number(target.downloadsCount) || 0, Number(count) || 0);
+              updateTableRowViewCount(fileId, target.downloadsCount);
+              updatePreviewModalViews(target);
+            }
           } else if (e.data && (e.data.action === 'INSERT' || e.data.action === 'REFRESH')) {
             refreshFilesList(false);
           }
@@ -892,6 +900,7 @@ function renderFilesTable() {
 
   filtered.forEach((file) => {
     const tr = document.createElement('tr');
+    tr.dataset.fileId = String(file.id);
     const isItemLink = Boolean(file.isLink || file.type === 'url' || file.extension === 'link');
     const displayName = isItemLink ? (extractDomain(file.downloadUrl || file.name) || file.name) : file.name;
     const { iconClass, label } = getFileTypeDetails(file.name, isItemLink);
@@ -1119,11 +1128,65 @@ function handleDownloadAttempt(file, onSuccess) {
   }
 }
 
+// Track visited file timestamps to debounce rapid duplicate increments
+const recentlyViewedFiles = new Map();
+
+function updateTableRowViewCount(fileId, count) {
+  if (!fileId) return;
+  const strId = String(fileId);
+  const row = filesTbody.querySelector(`tr[data-file-id="${strId}"]`) ||
+              filesTbody.querySelector(`tr [data-id="${strId}"]`)?.closest('tr');
+  if (row) {
+    const viewSpan = row.querySelector('.cell-views-count span');
+    if (viewSpan) {
+      viewSpan.textContent = count;
+    }
+    const viewWrapper = row.querySelector('.cell-views-count');
+    if (viewWrapper) {
+      viewWrapper.title = `${count} views`;
+    }
+  }
+}
+
+function updatePreviewModalViews(file) {
+  const previewModal = document.getElementById('preview-modal');
+  const previewModalMeta = document.getElementById('preview-modal-meta');
+  if (previewModal && previewModal.open && previewModalMeta && file) {
+    const isItemLink = Boolean(file.isLink || file.type === 'url' || file.extension === 'link');
+    previewModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • ${isItemLink ? 'Web Link' : (file.extension || 'file').toUpperCase()} • ${file.downloadsCount || 0} views`;
+  }
+}
+
+async function recordFileView(file) {
+  if (!file || !file.id) return;
+  const strId = String(file.id);
+  const now = Date.now();
+  const lastTime = recentlyViewedFiles.get(strId) || 0;
+  if (now - lastTime < 1500) {
+    return;
+  }
+  recentlyViewedFiles.set(strId, now);
+
+  try {
+    file.downloadsCount = (Number(file.downloadsCount) || 0) + 1;
+    updateTableRowViewCount(strId, file.downloadsCount);
+    updatePreviewModalViews(file);
+
+    const newCount = await dbService.incrementDownload(file.id);
+    if (newCount && newCount > file.downloadsCount) {
+      file.downloadsCount = newCount;
+      updateTableRowViewCount(strId, file.downloadsCount);
+      updatePreviewModalViews(file);
+    }
+  } catch (err) {
+    console.warn('Share247: recordFileView error:', err);
+  }
+}
+
 async function triggerItemAction(file) {
+  recordFileView(file);
   if (file.isLink) {
     try {
-      await dbService.incrementDownload(file.id);
-      file.downloadsCount = (file.downloadsCount || 0) + 1;
       window.open(file.downloadUrl, '_blank', 'noopener,noreferrer');
       showToast(`Opening "${file.name}"...`, 'info');
     } catch (_) {
@@ -1204,8 +1267,7 @@ function openPinModal(file, onUnlocked) {
 async function triggerDownload(file) {
   try {
     showToast(`Preparing download for "${file.name}"...`);
-    await dbService.incrementDownload(file.id);
-    file.downloadsCount = (file.downloadsCount || 0) + 1;
+    recordFileView(file);
 
     try {
       // Fetch as blob to guarantee cross-origin download attribute is honored by browser
@@ -1361,6 +1423,8 @@ async function openFilePreview(file) {
     return;
   }
 
+  recordFileView(file);
+
   const previewModal = document.getElementById('preview-modal');
   const previewModalTitle = document.getElementById('preview-modal-title');
   const previewModalMeta = document.getElementById('preview-modal-meta');
@@ -1380,10 +1444,11 @@ async function openFilePreview(file) {
   previewModalBadge.className = `file-badge ${iconClass}`;
   previewModalBadge.textContent = label;
   previewModalTitle.textContent = displayName;
-  previewModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • ${isItemLink ? 'Web Link' : (file.extension || 'file').toUpperCase()}`;
+  previewModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • ${isItemLink ? 'Web Link' : (file.extension || 'file').toUpperCase()} • ${file.downloadsCount || 0} views`;
 
   if (previewDirectOpen) {
     previewDirectOpen.href = file.downloadUrl;
+    previewDirectOpen.onclick = () => recordFileView(file);
     if (previewDirectLabel) {
       previewDirectLabel.textContent = isItemLink ? 'Visit Site' : 'Direct Link';
     }
@@ -1743,6 +1808,11 @@ function renderLinkPreview(file, container) {
       </a>
     </div>
   `;
+
+  const launchBtn = container.querySelector('.preview-link-btn-launch');
+  if (launchBtn) {
+    launchBtn.addEventListener('click', () => recordFileView(file));
+  }
 }
 
 // 7. Audio / Video Media Player
@@ -1880,6 +1950,7 @@ async function checkUrlQueryParams() {
     try {
       const file = await dbService.getFileById(fileId);
       if (file) {
+        recordFileView(file);
         if (file.hasPin && !unlockedFileIds.has(file.id)) {
           openPinModal(file, () => {
             unlockedFileIds.add(file.id);

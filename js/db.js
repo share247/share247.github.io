@@ -94,6 +94,26 @@ class DatabaseService {
     return parts.length > 1 ? parts.pop().toLowerCase() : '';
   }
 
+  getViewCount(fileId) {
+    if (!fileId) return 0;
+    try {
+      const counts = JSON.parse(localStorage.getItem('share247_view_counts') || '{}');
+      return Number(counts[String(fileId)]) || 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  cacheViewCount(fileId, count) {
+    if (!fileId) return;
+    try {
+      const counts = JSON.parse(localStorage.getItem('share247_view_counts') || '{}');
+      counts[String(fileId)] = Math.max(Number(counts[String(fileId)]) || 0, Number(count) || 0);
+      localStorage.setItem('share247_view_counts', JSON.stringify(counts));
+      broadcastVaultChange('view_increment', { fileId: String(fileId), count: counts[String(fileId)] });
+    } catch (_) {}
+  }
+
   // ==========================================
   // SUPABASE IMPLEMENTATION
   // ==========================================
@@ -129,6 +149,10 @@ class DatabaseService {
     const isLink = cleanType === 'url' || cleanType === 'text/x-uri' || r.extension === 'link' || (r.storage_path && r.storage_path.startsWith('link://'));
     const displayName = isLink ? (this.extractDomain(r.name || r.download_url) || r.name) : r.name;
 
+    const cachedViews = this.getViewCount(r.id);
+    const serverViews = Number(r.downloads_count) || 0;
+    const finalViews = Math.max(cachedViews, serverViews);
+
     return {
       id: r.id,
       name: displayName,
@@ -141,7 +165,7 @@ class DatabaseService {
       downloadUrl: r.download_url,
       createdAt: r.created_at,
       expiresAt: r.expires_at,
-      downloadsCount: r.downloads_count,
+      downloadsCount: finalViews,
       hasPin: Boolean(pinVal),
       pin: pinVal,
       moderationStatus: modStatus,
@@ -368,19 +392,44 @@ class DatabaseService {
   }
 
   async incrementSupabaseDownload(fileId) {
-    // Increment download counter
-    const { data } = await this.supabase
-      .from('files')
-      .select('downloads_count')
-      .eq('id', fileId)
-      .single();
+    const strId = String(fileId).trim();
+    let nextCount = (this.getViewCount(strId) || 0) + 1;
+    this.cacheViewCount(strId, nextCount);
 
-    if (data) {
-      await this.supabase
+    try {
+      // 1. Fetch current counter from Supabase
+      const { data, error } = await this.supabase
         .from('files')
-        .update({ downloads_count: (data.downloads_count || 0) + 1 })
-        .eq('id', fileId);
+        .select('downloads_count')
+        .eq('id', strId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('Share247: Supabase fetch downloads_count error:', error);
+      }
+
+      const currentServerCount = (data && data.downloads_count != null) ? Number(data.downloads_count) : 0;
+      nextCount = Math.max(currentServerCount + 1, nextCount);
+
+      // 2. Persist updated counter to Supabase
+      const { data: updated, error: updateError } = await this.supabase
+        .from('files')
+        .update({ downloads_count: nextCount })
+        .eq('id', strId)
+        .select('downloads_count')
+        .maybeSingle();
+
+      if (updateError) {
+        console.warn('Share247: Supabase update downloads_count error:', updateError);
+      } else if (updated && updated.downloads_count != null) {
+        nextCount = Number(updated.downloads_count);
+      }
+    } catch (err) {
+      console.warn('Share247: Supabase incrementDownload network exception:', err);
     }
+
+    this.cacheViewCount(strId, nextCount);
+    return nextCount;
   }
 
   async deleteFileFromSupabase(fileId, storagePath) {
@@ -582,6 +631,9 @@ class DatabaseService {
             meta.moderationStatus = r.moderationStatus || 'safe';
             meta.moderationReason = r.moderationReason || '';
             meta.flaggedAt = r.flaggedAt || null;
+            const cachedViews = this.getViewCount(r.id);
+            const localViews = Number(r.downloadsCount) || 0;
+            meta.downloadsCount = Math.max(cachedViews, localViews);
             return meta;
           })
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -613,6 +665,9 @@ class DatabaseService {
         meta.moderationStatus = record.moderationStatus || 'safe';
         meta.moderationReason = record.moderationReason || '';
         meta.flaggedAt = record.flaggedAt || null;
+        const cachedViews = this.getViewCount(record.id);
+        const localViews = Number(record.downloadsCount) || 0;
+        meta.downloadsCount = Math.max(cachedViews, localViews);
         resolve(meta);
       };
       req.onerror = () => reject(req.error);
@@ -620,19 +675,37 @@ class DatabaseService {
   }
 
   async incrementLocalDownload(fileId) {
+    const strId = String(fileId).trim();
+    let nextCount = (this.getViewCount(strId) || 0) + 1;
+    this.cacheViewCount(strId, nextCount);
+
+    if (!this.idb) {
+      try {
+        await this.initIndexedDB();
+      } catch (_) {}
+    }
+    if (!this.idb) return nextCount;
+
     return new Promise((resolve) => {
-      const tx = this.idb.transaction(['files'], 'readwrite');
-      const store = tx.objectStore('files');
-      const req = store.get(fileId);
-      req.onsuccess = () => {
-        const record = req.result;
-        if (record) {
-          record.downloadsCount = (record.downloadsCount || 0) + 1;
-          store.put(record);
-        }
-        resolve();
-      };
-      req.onerror = () => resolve();
+      try {
+        const tx = this.idb.transaction(['files'], 'readwrite');
+        const store = tx.objectStore('files');
+        const req = store.get(strId);
+        req.onsuccess = () => {
+          const record = req.result;
+          if (record) {
+            record.downloadsCount = Math.max((Number(record.downloadsCount) || 0) + 1, nextCount);
+            nextCount = record.downloadsCount;
+            this.cacheViewCount(strId, nextCount);
+            store.put(record);
+          }
+          resolve(nextCount);
+        };
+        req.onerror = () => resolve(nextCount);
+      } catch (err) {
+        console.warn('Share247: Local increment exception:', err);
+        resolve(nextCount);
+      }
     });
   }
 
