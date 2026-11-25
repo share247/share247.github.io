@@ -204,6 +204,19 @@ function setupEventListeners() {
     btnEmptyLink.addEventListener('click', () => openLinkDialog());
   }
 
+  // Navbar & Empty State Quick Text Trigger
+  const btnNavbarText = document.getElementById('btn-navbar-text');
+  if (btnNavbarText) {
+    btnNavbarText.addEventListener('click', () => focusQuickTextBox());
+  }
+
+  const btnEmptyText = document.getElementById('btn-empty-text');
+  if (btnEmptyText) {
+    btnEmptyText.addEventListener('click', () => focusQuickTextBox());
+  }
+
+  setupQuickTextShare();
+
   // Copy destination URL button in share modal
   const btnCopyDestinationUrl = document.getElementById('btn-copy-destination-url');
   if (btnCopyDestinationUrl) {
@@ -222,14 +235,23 @@ function setupEventListeners() {
     });
   }
 
-  // Paste Event: if user presses Ctrl+V anywhere and clipboard is a URL, open Link Dialog!
+  // Paste Event: if user presses Ctrl+V anywhere outside form inputs:
+  // URL -> open Link Dialog; plain text -> fill Quick Share Textbox!
   window.addEventListener('paste', (e) => {
-    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
-    if (activeTag === 'input' || activeTag === 'textarea') return;
+    const activeEl = document.activeElement;
+    const activeTag = activeEl ? activeEl.tagName.toLowerCase() : '';
+    if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select' || activeEl?.isContentEditable) return;
+    if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) return;
+
     const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-    if (pastedText && isPotentialUrl(pastedText.trim())) {
+    if (!pastedText || !pastedText.trim()) return;
+
+    if (isPotentialUrl(pastedText.trim())) {
       e.preventDefault();
       openLinkDialog(pastedText.trim());
+    } else {
+      e.preventDefault();
+      focusQuickTextBox(pastedText);
     }
   });
 
@@ -699,6 +721,160 @@ async function uploadSingleFile(file, pin = null) {
   }
 }
 
+function focusQuickTextBox(prefillText = null) {
+  const input = document.getElementById('quick-text-input');
+  const meta = document.getElementById('quick-text-meta');
+  if (!input) return;
+
+  if (typeof prefillText === 'string') {
+    input.value = prefillText;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  if (meta) meta.hidden = false;
+  input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  input.focus();
+}
+
+function deriveQuickTextFilename(rawText, titleInputVal, ext) {
+  const safeExt = (ext || 'txt').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'txt';
+  const cleanedTitle = (titleInputVal || '')
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    .slice(0, 120);
+
+  if (cleanedTitle) {
+    const parts = cleanedTitle.split('.');
+    const maybeExt = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+    if (maybeExt && isTextOrCodeExtension(maybeExt)) {
+      return cleanedTitle;
+    }
+    return `${cleanedTitle}.${safeExt}`;
+  }
+
+  // Build concise slug from first non-empty line, or fallback timestamp
+  const firstLine = rawText
+    .split(/\r\n|\n|\r/)
+    .map(l => l.trim())
+    .find(l => l.length > 0) || '';
+  const slug = firstLine
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32);
+
+  if (slug.length >= 3) {
+    return `${slug}.${safeExt}`;
+  }
+  const now = new Date();
+  const stamp = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  return `note_${stamp}.${safeExt}`;
+}
+
+function setupQuickTextShare() {
+  const form = document.getElementById('quick-text-form');
+  const textarea = document.getElementById('quick-text-input');
+  const metaRow = document.getElementById('quick-text-meta');
+  const titleInput = document.getElementById('quick-text-title');
+  const extSelect = document.getElementById('quick-text-ext');
+  const pinInput = document.getElementById('quick-text-pin');
+  const statsLabel = document.getElementById('quick-text-stats');
+  const clearBtn = document.getElementById('btn-quick-text-clear');
+  const submitBtn = document.getElementById('btn-quick-share');
+
+  if (!form || !textarea) return;
+
+  const syncGrowAndStats = () => {
+    const val = textarea.value;
+    if (textarea.parentNode && textarea.parentNode.classList.contains('growable-textarea')) {
+      textarea.parentNode.dataset.replicatedValue = val;
+    }
+    if (statsLabel) {
+      const len = val.length;
+      const lineCount = len === 0 ? 0 : val.split(/\r\n|\n|\r/).length;
+      statsLabel.textContent = len === 0 ? '0 chars' : `${len.toLocaleString()} chars • ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`;
+    }
+  };
+
+  const resetComposeBox = (collapseMeta = true) => {
+    textarea.value = '';
+    textarea.setCustomValidity('');
+    if (titleInput) titleInput.value = '';
+    if (pinInput) pinInput.value = '';
+    syncGrowAndStats();
+    if (collapseMeta && metaRow) {
+      metaRow.hidden = true;
+    }
+  };
+
+  textarea.addEventListener('focus', () => {
+    if (metaRow) metaRow.hidden = false;
+  });
+
+  textarea.addEventListener('input', () => {
+    textarea.setCustomValidity('');
+    if (metaRow) metaRow.hidden = false;
+    syncGrowAndStats();
+  });
+
+  textarea.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  form.addEventListener('focusout', () => {
+    requestAnimationFrame(() => {
+      if (!form.contains(document.activeElement)) {
+        const hasAnyInput =
+          textarea.value.trim().length > 0 ||
+          (titleInput && titleInput.value.trim().length > 0) ||
+          (pinInput && pinInput.value.trim().length > 0);
+        if (!hasAnyInput && metaRow) {
+          metaRow.hidden = true;
+        }
+      }
+    });
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      resetComposeBox(false);
+      textarea.focus();
+    });
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const rawText = textarea.value;
+    if (!rawText || rawText.trim().length === 0) {
+      textarea.setCustomValidity('Please enter or paste some text to share.');
+      textarea.reportValidity();
+      textarea.focus();
+      return;
+    }
+
+    const byteSize = new Blob([rawText]).size;
+    if (byteSize > 100 * 1024 * 1024) {
+      showToast('Pasted text exceeds the 100 MB limit.', 'error');
+      return;
+    }
+
+    const ext = extSelect ? extSelect.value : 'txt';
+    const filename = deriveQuickTextFilename(rawText, titleInput ? titleInput.value : '', ext);
+    const pin = pinInput && pinInput.value.trim() ? pinInput.value.trim() : null;
+    const textFile = new File([rawText], filename, { type: 'text/plain' });
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      await uploadSingleFile(textFile, pin);
+      resetComposeBox(true);
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
+
 function openLinkDialog(initialUrl = '') {
   const linkDialog = document.getElementById('link-dialog');
   const linkForm = document.getElementById('link-options-form');
@@ -881,16 +1057,19 @@ function renderFilesTable() {
     const emptyDesc = emptyState.querySelector('p');
     const btnEmptyUpload = document.getElementById('btn-empty-upload');
     const btnEmptyLink = document.getElementById('btn-empty-link');
+    const btnEmptyText = document.getElementById('btn-empty-text');
     if (query) {
       if (emptyTitle) emptyTitle.textContent = `No items matching "${query}"`;
       if (emptyDesc) emptyDesc.innerHTML = 'Try adjusting your search query or clear the filter.';
       if (btnEmptyUpload) btnEmptyUpload.hidden = true;
       if (btnEmptyLink) btnEmptyLink.hidden = true;
+      if (btnEmptyText) btnEmptyText.hidden = true;
     } else {
       if (emptyTitle) emptyTitle.textContent = 'Vault is empty';
-      if (emptyDesc) emptyDesc.innerHTML = 'Upload a file or share a link to store it for 7 days with automatic purging.';
+      if (emptyDesc) emptyDesc.innerHTML = 'Upload a file, paste text above, or share a link to store it for 7 days.';
       if (btnEmptyUpload) btnEmptyUpload.hidden = false;
       if (btnEmptyLink) btnEmptyLink.hidden = false;
+      if (btnEmptyText) btnEmptyText.hidden = false;
     }
     updateFooterStorageTracker();
     return;
@@ -1729,7 +1908,185 @@ function renderOfficeDocPreview(file, container, modal) {
   `;
 }
 
-// 5. Text & Code Renderer
+// 5. Text & Code Renderer (Aligned Grid, Wrap Toggle & Safe Syntax Highlighting)
+const CODE_HIGHLIGHT_KEYWORDS = new Set([
+  'auto', 'break', 'case', 'catch', 'class', 'const', 'constexpr', 'continue', 'default',
+  'delete', 'do', 'else', 'enum', 'explicit', 'export', 'extern', 'false', 'finally',
+  'for', 'friend', 'from', 'function', 'goto', 'if', 'import', 'in', 'inline', 'let',
+  'mutable', 'namespace', 'new', 'noexcept', 'nullptr', 'null', 'operator', 'private',
+  'protected', 'public', 'register', 'return', 'sizeof', 'static', 'static_cast',
+  'dynamic_cast', 'reinterpret_cast', 'const_cast', 'struct', 'switch', 'template',
+  'this', 'throw', 'true', 'try', 'typedef', 'typename', 'union', 'using', 'var',
+  'virtual', 'volatile', 'while', 'async', 'await', 'yield', 'def', 'elif', 'except',
+  'lambda', 'nonlocal', 'pass', 'raise', 'with', 'as', 'None', 'True', 'False', 'self',
+  'fn', 'impl', 'match', 'mod', 'mut', 'pub', 'ref', 'trait', 'where', 'package', 'func',
+  'defer', 'go', 'chan', 'select', 'interface', 'extends', 'implements', 'super'
+]);
+
+const CODE_HIGHLIGHT_TYPES = new Set([
+  'bool', 'char', 'char8_t', 'char16_t', 'char32_t', 'double', 'float', 'int', 'long',
+  'short', 'signed', 'unsigned', 'void', 'wchar_t', 'size_t', 'ptrdiff_t', 'int8_t',
+  'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+  'string', 'vector', 'map', 'unordered_map', 'set', 'unordered_set', 'pair', 'tuple',
+  'array', 'deque', 'queue', 'stack', 'list', 'std', 'cin', 'cout', 'cerr', 'endl',
+  'printf', 'scanf', 'malloc', 'calloc', 'free', 'Boolean', 'Number', 'String', 'Object',
+  'Array', 'Promise', 'Map', 'Set', 'Error', 'console', 'document', 'window'
+]);
+
+function highlightCodeLines(lines, ext) {
+  const plainExts = new Set(['txt', 'text', 'log', 'env', 'ini', 'conf', '']);
+  if (plainExts.has(ext)) {
+    return lines.map((line) => escapeHtml(line));
+  }
+
+  if (ext === 'json') {
+    const jsonTokenRegex = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
+    return lines.map((line) => {
+      let out = '';
+      let lastIdx = 0;
+      let match;
+      jsonTokenRegex.lastIndex = 0;
+      while ((match = jsonTokenRegex.exec(line)) !== null) {
+        if (match.index > lastIdx) {
+          out += escapeHtml(line.slice(lastIdx, match.index));
+        }
+        if (match[1]) {
+          const cls = match[2] ? 'tok-key' : 'tok-str';
+          out += `<span class="${cls}">${escapeHtml(match[1])}</span>${match[2] ? escapeHtml(match[2]) : ''}`;
+        } else if (match[3]) {
+          out += `<span class="tok-kw">${escapeHtml(match[3])}</span>`;
+        } else {
+          out += `<span class="tok-num">${escapeHtml(match[0])}</span>`;
+        }
+        lastIdx = jsonTokenRegex.lastIndex;
+      }
+      if (lastIdx < line.length) {
+        out += escapeHtml(line.slice(lastIdx));
+      }
+      return out;
+    });
+  }
+
+  const hashCommentExts = new Set(['py', 'sh', 'bash', 'zsh', 'rb', 'yaml', 'yml', 'toml', 'r']);
+  const cLikePreprocExts = new Set(['c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh', 'ino']);
+  const supportsBlockComments = !hashCommentExts.has(ext);
+  let inBlockComment = false;
+
+  const inlineTokenRegex = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\b(0[xXbB][0-9a-fA-F_]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?[uUlLfF]*)\b|\b([A-Za-z_][A-Za-z0-9_]*)\b/g;
+
+  const highlightSegment = (seg) => {
+    let out = '';
+    let lastIdx = 0;
+    let match;
+    inlineTokenRegex.lastIndex = 0;
+    while ((match = inlineTokenRegex.exec(seg)) !== null) {
+      if (match.index > lastIdx) {
+        out += escapeHtml(seg.slice(lastIdx, match.index));
+      }
+      if (match[1]) {
+        out += `<span class="tok-str">${escapeHtml(match[1])}</span>`;
+      } else if (match[2]) {
+        out += `<span class="tok-num">${escapeHtml(match[2])}</span>`;
+      } else if (match[3]) {
+        const ident = match[3];
+        if (CODE_HIGHLIGHT_KEYWORDS.has(ident)) {
+          out += `<span class="tok-kw">${escapeHtml(ident)}</span>`;
+        } else if (CODE_HIGHLIGHT_TYPES.has(ident)) {
+          out += `<span class="tok-type">${escapeHtml(ident)}</span>`;
+        } else {
+          out += escapeHtml(ident);
+        }
+      }
+      lastIdx = inlineTokenRegex.lastIndex;
+    }
+    if (lastIdx < seg.length) {
+      out += escapeHtml(seg.slice(lastIdx));
+    }
+    return out;
+  };
+
+  return lines.map((line) => {
+    let i = 0;
+    let html = '';
+    const len = line.length;
+
+    // Preprocessor directive (#include, #define, etc.) for C/C++
+    if (!inBlockComment && cLikePreprocExts.has(ext) && /^\s*#/.test(line)) {
+      const commentIdx = line.indexOf('//');
+      if (commentIdx >= 0) {
+        return `<span class="tok-pre">${escapeHtml(line.slice(0, commentIdx))}</span><span class="tok-com">${escapeHtml(line.slice(commentIdx))}</span>`;
+      }
+      return `<span class="tok-pre">${escapeHtml(line)}</span>`;
+    }
+
+    while (i < len) {
+      if (inBlockComment) {
+        const endIdx = line.indexOf('*/', i);
+        if (endIdx === -1) {
+          html += `<span class="tok-com">${escapeHtml(line.slice(i))}</span>`;
+          i = len;
+        } else {
+          html += `<span class="tok-com">${escapeHtml(line.slice(i, endIdx + 2))}</span>`;
+          inBlockComment = false;
+          i = endIdx + 2;
+        }
+        continue;
+      }
+
+      // Scan outside block comments while respecting string literals
+      let segEnd = len;
+      let mode = 'none';
+      let quoteChar = '';
+      for (let j = i; j < len; j++) {
+        const ch = line[j];
+        if (quoteChar) {
+          if (ch === '\\') {
+            j++;
+          } else if (ch === quoteChar) {
+            quoteChar = '';
+          }
+          continue;
+        }
+        if (ch === '"' || ch === "'" || ch === '`') {
+          quoteChar = ch;
+          continue;
+        }
+        if (hashCommentExts.has(ext) && ch === '#') {
+          segEnd = j;
+          mode = 'line_comment';
+          break;
+        }
+        if (supportsBlockComments && ch === '/' && line[j + 1] === '/') {
+          segEnd = j;
+          mode = 'line_comment';
+          break;
+        }
+        if (supportsBlockComments && ch === '/' && line[j + 1] === '*') {
+          segEnd = j;
+          mode = 'block_start';
+          break;
+        }
+      }
+
+      if (segEnd > i) {
+        html += highlightSegment(line.slice(i, segEnd));
+      }
+
+      if (mode === 'line_comment') {
+        html += `<span class="tok-com">${escapeHtml(line.slice(segEnd))}</span>`;
+        i = len;
+      } else if (mode === 'block_start') {
+        inBlockComment = true;
+        i = segEnd;
+      } else {
+        i = len;
+      }
+    }
+
+    return html;
+  });
+}
+
 async function renderTextCodePreview(file, container, modal) {
   try {
     const response = await fetch(file.downloadUrl);
@@ -1741,33 +2098,73 @@ async function renderTextCodePreview(file, container, modal) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    const text = await response.text();
-    if (text.includes('"NoSuchKey"') && text.includes('"statusCode":"404"')) {
+    const rawText = await response.text();
+    if (rawText.includes('"NoSuchKey"') && rawText.includes('"statusCode":"404"')) {
       renderMissingObjectError(file, container, modal);
       return;
     }
 
-    const lines = text.split('\n');
-    const lineNumbersHtml = lines.map((_, idx) => `<span class="code-gutter-line">${idx + 1}</span>`).join('');
+    const text = rawText.replace(/^\uFEFF/, '');
+    const normalized = text.replace(/\r\n?/g, '\n');
+    const ext = (file.extension || '').toLowerCase().replace(/^\./, '');
+    const lines = normalized.length === 0 ? [] : normalized.split('\n');
+    const defaultWrap = new Set(['txt', 'text', 'md', 'markdown', 'log', '']).has(ext);
+    const { iconClass, label } = getFileTypeDetails(file.name);
+
+    let viewportHtml = '';
+    if (lines.length === 0) {
+      viewportHtml = `<div class="code-empty-notice">This file is empty (0 bytes).</div>`;
+    } else if (lines.length <= 5000) {
+      const highlighted = highlightCodeLines(lines, ext);
+      const gridRowsHtml = highlighted
+        .map((lineHtml, idx) => `<span class="code-ln" aria-hidden="true">${idx + 1}</span><span class="code-line">${lineHtml || '&#8203;'}</span>`)
+        .join('');
+      viewportHtml = `<div class="code-grid">${gridRowsHtml}</div>`;
+    } else {
+      const lineNumbersHtml = lines.map((_, idx) => `<span class="code-gutter-line">${idx + 1}</span>`).join('');
+      viewportHtml = `
+        <div class="code-gutter" aria-hidden="true">${lineNumbersHtml}</div>
+        <pre class="code-pre"><code>${escapeHtml(normalized)}</code></pre>
+      `;
+    }
+
+    const viewportExtraClass = [
+      lines.length > 5000 ? 'code-viewport-fast' : '',
+      defaultWrap ? 'is-wrapped' : ''
+    ].filter(Boolean).join(' ');
 
     container.innerHTML = `
       <div class="preview-code-container">
         <div class="code-toolbar">
           <div class="code-toolbar-info">
-            <span class="file-badge icon-type-blue">${(file.extension || 'TXT').toUpperCase()}</span>
-            <span>${lines.length} lines • ${file.formattedSize || dbService.formatBytes(file.size)}</span>
+            <span class="file-badge ${iconClass}">${label}</span>
+            <span>${lines.length.toLocaleString()} ${lines.length === 1 ? 'line' : 'lines'} &bull; ${text.length.toLocaleString()} chars &bull; ${file.formattedSize || dbService.formatBytes(file.size)}</span>
           </div>
-          <button type="button" class="btn-code-copy" id="btn-copy-code-text">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            <span id="copy-code-label">Copy Text</span>
-          </button>
+          <div class="code-toolbar-actions">
+            <button type="button" class="btn-code-copy" id="btn-toggle-code-wrap" aria-pressed="${defaultWrap ? 'true' : 'false'}" title="Toggle soft word wrap">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"></line><path d="M3 12h15a3 3 0 1 1 0 6h-4"></path><polyline points="16 16 14 18 16 20"></polyline><line x1="3" y1="18" x2="10" y2="18"></line></svg>
+              <span>Wrap</span>
+            </button>
+            <button type="button" class="btn-code-copy" id="btn-copy-code-text">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <span id="copy-code-label">Copy Text</span>
+            </button>
+          </div>
         </div>
-        <div class="code-viewport">
-          <div class="code-gutter">${lineNumbersHtml}</div>
-          <pre class="code-pre"><code>${escapeHtml(text)}</code></pre>
+        <div id="code-viewport" class="code-viewport ${viewportExtraClass}" tabindex="0">
+          ${viewportHtml}
         </div>
       </div>
     `;
+
+    const codeViewport = container.querySelector('#code-viewport');
+    const btnWrap = container.querySelector('#btn-toggle-code-wrap');
+    if (btnWrap && codeViewport) {
+      btnWrap.addEventListener('click', () => {
+        const isWrapped = codeViewport.classList.toggle('is-wrapped');
+        btnWrap.setAttribute('aria-pressed', isWrapped ? 'true' : 'false');
+      });
+    }
 
     const btnCopy = container.querySelector('#btn-copy-code-text');
     const labelCopy = container.querySelector('#copy-code-label');
@@ -1936,9 +2333,9 @@ function isTextOrCodeExtension(ext) {
   const codeExts = new Set([
     'txt', 'text', 'md', 'markdown', 'json', 'xml', 'html', 'htm', 'css', 'scss',
     'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs',
-    'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh',
-    'py', 'java', 'go', 'rs', 'php', 'rb', 'sh', 'bash', 'zsh',
-    'sql', 'yaml', 'yml', 'env', 'ini', 'conf', 'log'
+    'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh', 'ino',
+    'py', 'java', 'go', 'rs', 'php', 'rb', 'sh', 'bash', 'zsh', 'cs', 'kt', 'swift', 'dart', 'lua', 'r',
+    'sql', 'yaml', 'yml', 'toml', 'env', 'ini', 'conf', 'log'
   ]);
   return codeExts.has((ext || '').toLowerCase());
 }
@@ -1978,10 +2375,16 @@ function getFileTypeDetails(filename, isLink = false) {
   }
   const ext = (filename || '').split('.').pop().toLowerCase();
 
-  if (['doc', 'docx', 'txt', 'rtf', 'odt', 'md'].includes(ext)) {
+  if (['txt', 'text'].includes(ext)) {
+    return { iconClass: 'icon-type-blue', label: 'TXT' };
+  }
+  if (['md', 'markdown'].includes(ext)) {
+    return { iconClass: 'icon-type-blue', label: 'MD' };
+  }
+  if (['doc', 'docx', 'rtf', 'odt'].includes(ext)) {
     return { iconClass: 'icon-type-blue', label: 'DOC' };
   }
-  if (['xls', 'xlsx', 'csv', 'ods', 'py', 'c', 'cpp', 'java', 'js', 'ts', 'html', 'css', 'json'].includes(ext)) {
+  if (['xls', 'xlsx', 'csv', 'ods', 'py', 'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh', 'java', 'js', 'ts', 'html', 'css', 'json'].includes(ext)) {
     return { iconClass: 'icon-type-green', label: ext.slice(0, 3).toUpperCase() };
   }
   if (['pdf'].includes(ext)) {
