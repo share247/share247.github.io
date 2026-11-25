@@ -204,15 +204,15 @@ function setupEventListeners() {
     btnEmptyLink.addEventListener('click', () => openLinkDialog());
   }
 
-  // Navbar & Empty State Quick Text Trigger
+  // Navbar & Empty State Text Share Modal Trigger
   const btnNavbarText = document.getElementById('btn-navbar-text');
   if (btnNavbarText) {
-    btnNavbarText.addEventListener('click', () => focusQuickTextBox());
+    btnNavbarText.addEventListener('click', () => openTextDialog());
   }
 
   const btnEmptyText = document.getElementById('btn-empty-text');
   if (btnEmptyText) {
-    btnEmptyText.addEventListener('click', () => focusQuickTextBox());
+    btnEmptyText.addEventListener('click', () => openTextDialog());
   }
 
   setupQuickTextShare();
@@ -236,7 +236,7 @@ function setupEventListeners() {
   }
 
   // Paste Event: if user presses Ctrl+V anywhere outside form inputs:
-  // URL -> open Link Dialog; plain text -> fill Quick Share Textbox!
+  // URL -> open Link Dialog; plain text -> open Share Text Modal!
   window.addEventListener('paste', (e) => {
     const activeEl = document.activeElement;
     const activeTag = activeEl ? activeEl.tagName.toLowerCase() : '';
@@ -251,7 +251,7 @@ function setupEventListeners() {
       openLinkDialog(pastedText.trim());
     } else {
       e.preventDefault();
-      focusQuickTextBox(pastedText);
+      openTextDialog(pastedText);
     }
   });
 
@@ -267,7 +267,8 @@ function setupEventListeners() {
     e.preventDefault();
     const uploadDialog = document.getElementById('upload-dialog');
     const linkDialog = document.getElementById('link-dialog');
-    if ((uploadDialog && uploadDialog.open) || (linkDialog && linkDialog.open)) return;
+    const textDialog = document.getElementById('text-dialog');
+    if ((uploadDialog && uploadDialog.open) || (linkDialog && linkDialog.open) || (textDialog && textDialog.open)) return;
     if (e.dataTransfer && e.dataTransfer.types && (Array.from(e.dataTransfer.types).includes('Files') || Array.from(e.dataTransfer.types).includes('text/uri-list'))) {
       dragCounter++;
       if (dragCounter === 1) {
@@ -346,22 +347,30 @@ function setupEventListeners() {
     uploadWidget.hidden = true;
   });
 
-  // Dialog backdrop click-to-close & close buttons
+  // Dialog backdrop click-to-close (require press & release outside so text selection drag never dismisses) & close buttons
   document.querySelectorAll('dialog').forEach(dialog => {
+    let pressedOutside = false;
+    const isOutside = (e) => {
+      const rect = dialog.getBoundingClientRect();
+      return (
+        e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom
+      );
+    };
     dialog.addEventListener('close', () => {
       dialog.scrollLeft = 0;
+      pressedOutside = false;
     });
-    dialog.addEventListener('click', (e) => {
-      const rect = dialog.getBoundingClientRect();
-      const isInDialog = (
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom
-      );
-      if (!isInDialog) {
+    dialog.addEventListener('pointerdown', (e) => {
+      pressedOutside = isOutside(e);
+    });
+    dialog.addEventListener('pointerup', (e) => {
+      if (pressedOutside && isOutside(e)) {
         dialog.close();
       }
+      pressedOutside = false;
     });
   });
 
@@ -721,18 +730,22 @@ async function uploadSingleFile(file, pin = null) {
   }
 }
 
-function focusQuickTextBox(prefillText = null) {
+function openTextDialog(prefillText = null) {
+  const textDialog = document.getElementById('text-dialog');
   const input = document.getElementById('quick-text-input');
-  const meta = document.getElementById('quick-text-meta');
-  if (!input) return;
+  if (!textDialog || !input) return;
 
   if (typeof prefillText === 'string') {
     input.value = prefillText;
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  if (meta) meta.hidden = false;
-  input.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  input.focus();
+
+  textDialog.scrollLeft = 0;
+  textDialog.showModal();
+
+  setTimeout(() => {
+    input.focus();
+  }, 60);
 }
 
 function deriveQuickTextFilename(rawText, titleInputVal, ext) {
@@ -770,9 +783,9 @@ function deriveQuickTextFilename(rawText, titleInputVal, ext) {
 }
 
 function setupQuickTextShare() {
+  const textDialog = document.getElementById('text-dialog');
   const form = document.getElementById('quick-text-form');
   const textarea = document.getElementById('quick-text-input');
-  const metaRow = document.getElementById('quick-text-meta');
   const titleInput = document.getElementById('quick-text-title');
   const extSelect = document.getElementById('quick-text-ext');
   const pinInput = document.getElementById('quick-text-pin');
@@ -794,24 +807,16 @@ function setupQuickTextShare() {
     }
   };
 
-  const resetComposeBox = (collapseMeta = true) => {
+  const resetComposeBox = () => {
     textarea.value = '';
     textarea.setCustomValidity('');
     if (titleInput) titleInput.value = '';
     if (pinInput) pinInput.value = '';
     syncGrowAndStats();
-    if (collapseMeta && metaRow) {
-      metaRow.hidden = true;
-    }
   };
-
-  textarea.addEventListener('focus', () => {
-    if (metaRow) metaRow.hidden = false;
-  });
 
   textarea.addEventListener('input', () => {
     textarea.setCustomValidity('');
-    if (metaRow) metaRow.hidden = false;
     syncGrowAndStats();
   });
 
@@ -823,23 +828,9 @@ function setupQuickTextShare() {
     }
   });
 
-  form.addEventListener('focusout', () => {
-    requestAnimationFrame(() => {
-      if (!form.contains(document.activeElement)) {
-        const hasAnyInput =
-          textarea.value.trim().length > 0 ||
-          (titleInput && titleInput.value.trim().length > 0) ||
-          (pinInput && pinInput.value.trim().length > 0);
-        if (!hasAnyInput && metaRow) {
-          metaRow.hidden = true;
-        }
-      }
-    });
-  });
-
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
-      resetComposeBox(false);
+      resetComposeBox();
       textarea.focus();
     });
   }
@@ -867,8 +858,11 @@ function setupQuickTextShare() {
 
     if (submitBtn) submitBtn.disabled = true;
     try {
+      if (textDialog && textDialog.open) {
+        textDialog.close();
+      }
       await uploadSingleFile(textFile, pin);
-      resetComposeBox(true);
+      resetComposeBox();
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }
@@ -1066,7 +1060,7 @@ function renderFilesTable() {
       if (btnEmptyText) btnEmptyText.hidden = true;
     } else {
       if (emptyTitle) emptyTitle.textContent = 'Vault is empty';
-      if (emptyDesc) emptyDesc.innerHTML = 'Upload a file, paste text above, or share a link to store it for 7 days.';
+      if (emptyDesc) emptyDesc.innerHTML = 'Upload a file, share text, or share a link to store it for 7 days.';
       if (btnEmptyUpload) btnEmptyUpload.hidden = false;
       if (btnEmptyLink) btnEmptyLink.hidden = false;
       if (btnEmptyText) btnEmptyText.hidden = false;

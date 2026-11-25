@@ -10,7 +10,7 @@
   <meta http-equiv="Expires" content="0">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'/%3E%3C/svg%3E">
   <link rel="alternate icon" type="image/svg+xml" href="assets/favicon.svg?v=20261124-v15">
-  <link rel="stylesheet" href="css/style.css?v=20261126-textshare-v16">
+  <link rel="stylesheet" href="css/style.css?v=20261126-textmodal-v17">
 </head>
 <body class="dark-theme">
 
@@ -89,66 +89,6 @@
         </button>
       </div>
     </div>
-
-    <!-- Minimal Quick Text Share Box -->
-    <section class="quick-text-share" id="quick-text-section" aria-label="Share text">
-      <form id="quick-text-form" class="quick-text-form">
-        <div class="quick-text-bar">
-          <div class="quick-text-icon" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-            </svg>
-          </div>
-          <label for="quick-text-input" class="visually-hidden">Paste or type text to share</label>
-          <div class="growable-textarea quick-text-grow" data-replicated-value="">
-            <textarea
-              id="quick-text-input"
-              name="text_content"
-              rows="1"
-              placeholder="Paste or type text to share..."
-              enterkeyhint="send"
-              required
-            ></textarea>
-          </div>
-          <button type="submit" id="btn-quick-share" class="btn-quick-share">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-            <span>Share</span>
-          </button>
-        </div>
-
-        <div id="quick-text-meta" class="quick-text-meta" hidden>
-          <div class="quick-text-meta-left">
-            <label for="quick-text-title" class="visually-hidden">Optional file title</label>
-            <input type="text" id="quick-text-title" name="title" class="quick-meta-input" placeholder="Title (optional)" maxlength="120" autocomplete="off">
-            <label for="quick-text-ext" class="visually-hidden">Format</label>
-            <select id="quick-text-ext" name="extension" class="quick-meta-select">
-              <option value="txt">.txt</option>
-              <option value="md">.md</option>
-              <option value="cpp">.cpp</option>
-              <option value="c">.c</option>
-              <option value="py">.py</option>
-              <option value="js">.js</option>
-              <option value="json">.json</option>
-              <option value="html">.html</option>
-              <option value="css">.css</option>
-            </select>
-            <label for="quick-text-pin" class="visually-hidden">Optional security PIN</label>
-            <input type="text" id="quick-text-pin" name="pin" class="quick-meta-input quick-meta-pin" placeholder="PIN (optional)" maxlength="12" inputmode="numeric" autocomplete="off">
-          </div>
-          <div class="quick-text-meta-right">
-            <span id="quick-text-stats" class="quick-text-stats">0 chars</span>
-            <span class="quick-text-shortcut" aria-hidden="true">Ctrl+Enter</span>
-            <button type="button" id="btn-quick-text-clear" class="btn-quick-clear">Clear</button>
-          </div>
-        </div>
-      </form>
-    </section>
 
     <!-- File List Table -->
     <div class="table-container" tabindex="0" role="region" aria-labelledby="vault-table-caption">
@@ -480,6 +420,91 @@
     </div>
   </dialog>
 
+  <!-- Share Text Dialog (Minimal Paste & Share) -->
+  <dialog id="text-dialog" class="text-dialog" aria-labelledby="text-dialog-title">
+    <div class="dialog-box">
+      <div class="dialog-header">
+        <div class="dialog-title-group">
+          <div class="dialog-title-icon icon-text-modal">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          </div>
+          <h3 id="text-dialog-title">Share Text</h3>
+        </div>
+        <button type="button" class="btn-dialog-close" aria-label="Close dialog">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <form id="quick-text-form">
+        <div class="dialog-field text-dialog-field">
+          <label for="quick-text-input">Text or Code <span class="required-star">*</span></label>
+          <div class="growable-textarea text-dialog-grow" data-replicated-value="">
+            <textarea
+              id="quick-text-input"
+              name="text_content"
+              rows="6"
+              placeholder="Paste or type text to share..."
+              enterkeyhint="send"
+              autofocus
+              required
+            ></textarea>
+          </div>
+          <div class="text-dialog-status-row">
+            <span id="quick-text-stats" class="quick-text-stats">0 chars</span>
+            <div class="text-dialog-status-actions">
+              <span class="quick-text-shortcut" aria-hidden="true">Ctrl+Enter</span>
+              <button type="button" id="btn-quick-text-clear" class="btn-quick-clear">Clear</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-dialog-options">
+          <div class="text-dialog-opt-title">
+            <label for="quick-text-title" class="visually-hidden">Optional file title</label>
+            <input type="text" id="quick-text-title" name="title" class="quick-meta-input" placeholder="Title (optional)" maxlength="120" autocomplete="off">
+          </div>
+          <div>
+            <label for="quick-text-ext" class="visually-hidden">Format</label>
+            <select id="quick-text-ext" name="extension" class="quick-meta-select">
+              <option value="txt">.txt</option>
+              <option value="md">.md</option>
+              <option value="cpp">.cpp</option>
+              <option value="c">.c</option>
+              <option value="py">.py</option>
+              <option value="js">.js</option>
+              <option value="json">.json</option>
+              <option value="html">.html</option>
+              <option value="css">.css</option>
+            </select>
+          </div>
+          <div>
+            <label for="quick-text-pin" class="visually-hidden">Optional security PIN</label>
+            <input type="text" id="quick-text-pin" name="pin" class="quick-meta-input quick-meta-pin" placeholder="PIN (optional)" maxlength="12" inputmode="numeric" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" class="btn-action-secondary btn-dialog-cancel">Cancel</button>
+          <button type="submit" id="btn-quick-share" class="btn-action-primary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <span>Share Text</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <!-- PIN Unlock Dialog -->
   <dialog id="pin-dialog" aria-labelledby="pin-dialog-title">
     <div class="dialog-box">
@@ -684,6 +709,6 @@
   <script src="js/vendor/xlsx.full.min.js"></script>
 
   <!-- App Bootstrap -->
-  <script type="module" src="js/app.js?v=20261126-textshare-v16"></script>
+  <script type="module" src="js/app.js?v=20261126-textmodal-v17"></script>
 </body>
 </html>
