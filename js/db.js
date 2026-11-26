@@ -94,6 +94,36 @@ class DatabaseService {
     return parts.length > 1 ? parts.pop().toLowerCase() : '';
   }
 
+  resolveExpiryIso(durationMs = SEVEN_DAYS_MS, nowMs = Date.now()) {
+    const parsed = Number(durationMs);
+    const ms = Number.isFinite(parsed) && parsed > 0
+      ? Math.min(SEVEN_DAYS_MS, Math.max(60 * 1000, parsed))
+      : SEVEN_DAYS_MS;
+    return new Date(nowMs + ms).toISOString();
+  }
+
+  trackExpiryWatch(id, storagePath, expiresAt) {
+    if (!id || !expiresAt || typeof localStorage === 'undefined') return;
+    try {
+      const list = JSON.parse(localStorage.getItem('share247_expiry_watch') || '[]');
+      const filtered = Array.isArray(list) ? list.filter(item => String(item.id) !== String(id)) : [];
+      filtered.push({ id: String(id), storagePath: storagePath || '', expiresAt });
+      localStorage.setItem('share247_expiry_watch', JSON.stringify(filtered.slice(-100)));
+    } catch (_) {}
+  }
+
+  untrackExpiryWatch(id) {
+    if (!id || typeof localStorage === 'undefined') return;
+    try {
+      const list = JSON.parse(localStorage.getItem('share247_expiry_watch') || '[]');
+      if (!Array.isArray(list)) return;
+      localStorage.setItem(
+        'share247_expiry_watch',
+        JSON.stringify(list.filter(item => String(item.id) !== String(id)))
+      );
+    } catch (_) {}
+  }
+
   getViewCount(fileId) {
     if (!fileId) return 0;
     try {
@@ -186,7 +216,7 @@ class DatabaseService {
     }
   }
 
-  async uploadFileToSupabase(file, onProgress, pin = null) {
+  async uploadFileToSupabase(file, onProgress, pin = null, durationMs = SEVEN_DAYS_MS) {
     const config = getStoredSupabaseConfig();
     const fileId = crypto.randomUUID ? crypto.randomUUID() : 'f_' + Date.now().toString(36);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -262,7 +292,7 @@ class DatabaseService {
 
     const publicUrl = urlData.publicUrl;
     const now = Date.now();
-    const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
+    const expiresAt = this.resolveExpiryIso(durationMs, now);
 
     const cleanType = file.type || 'application/octet-stream';
     const typeWithPin = pin ? `${cleanType}; pin=${encodeURIComponent(pin)}` : cleanType;
@@ -291,6 +321,8 @@ class DatabaseService {
       throw new Error(insertError.message || 'Failed to insert database record');
     }
 
+    this.trackExpiryWatch(inserted.id, inserted.storage_path, inserted.expires_at);
+
     if (onProgress) {
       onProgress({
         percent: 100,
@@ -308,14 +340,14 @@ class DatabaseService {
     return this.mapSupabaseRecord(inserted);
   }
 
-  async uploadLinkToSupabase(url, title, pin = null) {
+  async uploadLinkToSupabase(url, title, pin = null, durationMs = SEVEN_DAYS_MS) {
     const linkId = crypto.randomUUID ? crypto.randomUUID() : 'l_' + Date.now().toString(36);
     const domainName = this.extractDomain(url);
     const safeTitle = (title || '').trim() || domainName || url.replace(/^https?:\/\//i, '');
     const displayName = safeTitle.slice(0, 255);
     const storagePath = `link://${linkId}`;
     const now = Date.now();
-    const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
+    const expiresAt = this.resolveExpiryIso(durationMs, now);
 
     const cleanType = 'url';
     const typeWithPin = pin ? `${cleanType}; pin=${encodeURIComponent(pin)}` : cleanType;
@@ -344,10 +376,54 @@ class DatabaseService {
       throw new Error(insertError.message || 'Failed to insert link in database');
     }
 
+    this.trackExpiryWatch(inserted.id, inserted.storage_path, inserted.expires_at);
     return this.mapSupabaseRecord(inserted);
   }
 
+  async purgeExpiredSupabaseFiles(expiredItems = []) {
+    if (!this.supabase) return;
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+
+    // 1. Delete known expired items (including storage objects) passed directly or tracked locally
+    const toDelete = new Map();
+    for (const item of (expiredItems || [])) {
+      if (item && item.id) {
+        toDelete.set(String(item.id), item.storagePath || item.storage_path || '');
+      }
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const watched = JSON.parse(localStorage.getItem('share247_expiry_watch') || '[]');
+        if (Array.isArray(watched)) {
+          for (const w of watched) {
+            if (w && w.id && w.expiresAt && new Date(w.expiresAt).getTime() <= nowMs) {
+              toDelete.set(String(w.id), w.storagePath || '');
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    for (const [id, storagePath] of toDelete.entries()) {
+      try {
+        await this.deleteFileFromSupabase(id, storagePath);
+        addPurgedFileId(id);
+        this.untrackExpiryWatch(id);
+      } catch (_) {}
+    }
+
+    // 2. Sweep any expired rows directly in Supabase PostgreSQL
+    try {
+      await this.supabase
+        .from('files')
+        .delete()
+        .lte('expires_at', nowIso);
+    } catch (_) {}
+  }
+
   async getActiveFilesFromSupabase() {
+    await this.purgeExpiredSupabaseFiles().catch(() => {});
     const nowIso = new Date().toISOString();
     let query = this.supabase
       .from('files')
@@ -386,7 +462,11 @@ class DatabaseService {
 
     if (error || !data) return null;
     if (data.moderation_status === 'deleted') return null;
-    if (new Date(data.expires_at).getTime() <= Date.now()) return null; // Expired
+    if (new Date(data.expires_at).getTime() <= Date.now()) {
+      await this.deleteFileFromSupabase(data.id, data.storage_path).catch(() => {});
+      addPurgedFileId(data.id);
+      return null;
+    }
 
     return this.mapSupabaseRecord(data);
   }
@@ -520,10 +600,10 @@ class DatabaseService {
     });
   }
 
-  async uploadFileToLocal(file, onProgress, pin = null) {
+  async uploadFileToLocal(file, onProgress, pin = null, durationMs = SEVEN_DAYS_MS) {
     const fileId = crypto.randomUUID ? crypto.randomUUID() : 'f_' + Date.now().toString(36);
     const now = Date.now();
-    const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
+    const expiresAt = this.resolveExpiryIso(durationMs, now);
 
     for (let p = 20; p <= 100; p += 20) {
       if (onProgress) {
@@ -572,13 +652,13 @@ class DatabaseService {
     });
   }
 
-  async uploadLinkToLocal(url, title, pin = null) {
+  async uploadLinkToLocal(url, title, pin = null, durationMs = SEVEN_DAYS_MS) {
     const linkId = crypto.randomUUID ? crypto.randomUUID() : 'l_' + Date.now().toString(36);
     const domainName = this.extractDomain(url);
     const safeTitle = (title || '').trim() || domainName || url.replace(/^https?:\/\//i, '');
     const displayName = safeTitle.slice(0, 255);
     const now = Date.now();
-    const expiresAt = new Date(now + SEVEN_DAYS_MS).toISOString();
+    const expiresAt = this.resolveExpiryIso(durationMs, now);
     const urlBytes = Math.max(1, new Blob([url]).size);
 
     const record = {
@@ -653,6 +733,7 @@ class DatabaseService {
         const record = req.result;
         if (!record || record.moderationStatus === 'deleted') return resolve(null);
         if (new Date(record.expiresAt).getTime() <= Date.now()) {
+          this.deleteFileFromLocal(record.id).catch(() => {});
           return resolve(null);
         }
         const { blob, ...meta } = record;
@@ -737,18 +818,25 @@ class DatabaseService {
   // UNIFIED PUBLIC INTERFACE
   // ==========================================
 
-  async uploadFile(file, onProgress, pin = null) {
+  async uploadFile(file, onProgress, pin = null, durationMs = SEVEN_DAYS_MS) {
     if (this.mode === 'supabase') {
-      return this.uploadFileToSupabase(file, onProgress, pin);
+      return this.uploadFileToSupabase(file, onProgress, pin, durationMs);
     }
-    return this.uploadFileToLocal(file, onProgress, pin);
+    return this.uploadFileToLocal(file, onProgress, pin, durationMs);
   }
 
-  async uploadLink(url, title, pin = null) {
+  async uploadLink(url, title, pin = null, durationMs = SEVEN_DAYS_MS) {
     if (this.mode === 'supabase') {
-      return this.uploadLinkToSupabase(url, title, pin);
+      return this.uploadLinkToSupabase(url, title, pin, durationMs);
     }
-    return this.uploadLinkToLocal(url, title, pin);
+    return this.uploadLinkToLocal(url, title, pin, durationMs);
+  }
+
+  async purgeExpiredFiles(expiredItems = []) {
+    if (this.mode === 'supabase') {
+      return this.purgeExpiredSupabaseFiles(expiredItems);
+    }
+    return this.purgeExpiredLocalFiles();
   }
 
   async getActiveFiles() {

@@ -534,26 +534,50 @@ dialog.text-dialog {
 }
 
 .quick-meta-input,
-.quick-meta-select {
-  height: 34px;
-  padding: 0 0.7rem;
+.quick-meta-select,
+.duration-select,
+.custom-duration-row input,
+.custom-duration-row select {
+  height: 38px;
+  padding: 0 0.75rem;
   background-color: #12141a;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  font-size: 0.8125rem;
+  font-size: 0.84rem;
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.quick-meta-input {
+.duration-select {
   width: 100%;
+  cursor: pointer;
 }
 
-.quick-meta-pin {
-  width: 118px;
+.custom-duration-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.custom-duration-row[hidden] {
+  display: none;
+}
+
+.custom-duration-row input {
+  width: 100%;
   font-family: var(--font-mono);
+}
+
+.custom-duration-row select {
+  min-width: 112px;
+  cursor: pointer;
+}
+
+.quick-meta-input {
+  width: 100%;
 }
 
 .quick-meta-select {
@@ -562,9 +586,19 @@ dialog.text-dialog {
 }
 
 .quick-meta-input:focus,
-.quick-meta-select:focus {
+.quick-meta-select:focus,
+.duration-select:focus,
+.custom-duration-row input:focus,
+.custom-duration-row select:focus {
   border-color: #38bdf8;
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.duration-select option,
+.custom-duration-row select option,
+.quick-meta-select option {
+  background-color: #12141a;
+  color: #f8fafc;
 }
 
 .quick-text-stats {

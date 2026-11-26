@@ -4,8 +4,8 @@
  * file management, and instant purge controls for prohibited material.
  */
 
-import { dbService } from './db.js?v=20261123-final';
-import { moderationService } from './moderation.js?v=20261123-final';
+import { dbService } from './db.js?v=20261127-duration-pin-v18';
+import { moderationService } from './moderation.js?v=20261127-duration-pin-v18';
 
 // DOM Elements
 const authOverlay = document.getElementById('auth-overlay');
@@ -784,11 +784,16 @@ function getDaysRemaining(expiresAtStr) {
   const exp = new Date(expiresAtStr).getTime();
   const diff = exp - now;
   if (diff <= 0) return 'Expired';
-  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const totalSeconds = Math.floor(diff / 1000);
+  if (totalSeconds < 60) return `${Math.max(1, totalSeconds)}s left`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m left`;
+  const hours = Math.floor(totalMinutes / 60);
   const days = Math.floor(hours / 24);
   const remHours = hours % 24;
   if (days > 0) return `${days}d ${remHours}h left`;
-  return `${hours}h left`;
+  const remMinutes = totalMinutes % 60;
+  return remMinutes > 0 ? `${hours}h ${remMinutes}m left` : `${hours}h left`;
 }
 
 function escapeHtml(str) {

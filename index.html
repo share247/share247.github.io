@@ -10,7 +10,7 @@
   <meta http-equiv="Expires" content="0">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'/%3E%3C/svg%3E">
   <link rel="alternate icon" type="image/svg+xml" href="assets/favicon.svg?v=20261124-v15">
-  <link rel="stylesheet" href="css/style.css?v=20261126-textmodal-v17">
+  <link rel="stylesheet" href="css/style.css?v=20261127-duration-pin-v18">
 </head>
 <body class="dark-theme">
 
@@ -328,10 +328,34 @@
 
       <form id="upload-options-form">
         <div class="dialog-field">
+          <label for="upload-duration-select">Visibility Duration</label>
+          <select id="upload-duration-select" name="duration" class="duration-select">
+            <option value="604800000" selected>7 days (Default)</option>
+            <option value="259200000">3 days</option>
+            <option value="86400000">24 hours (1 day)</option>
+            <option value="21600000">6 hours</option>
+            <option value="3600000">1 hour</option>
+            <option value="900000">15 minutes</option>
+            <option value="300000">5 minutes</option>
+            <option value="60000">1 minute</option>
+            <option value="custom">Custom duration...</option>
+          </select>
+          <div id="upload-custom-duration-group" class="custom-duration-row" hidden>
+            <input type="number" id="upload-custom-duration-value" min="1" max="10080" placeholder="Enter time" inputmode="numeric">
+            <select id="upload-custom-duration-unit" aria-label="Duration unit">
+              <option value="60000">Minutes</option>
+              <option value="3600000" selected>Hours</option>
+              <option value="86400000">Days</option>
+            </select>
+          </div>
+          <p class="dialog-hint">Item stays visible until this duration ends, then deletes automatically (max 7 days).</p>
+        </div>
+
+        <div class="dialog-field">
           <label>Sharing Security</label>
           <div class="access-options">
             <label class="access-option-label">
-              <input type="radio" name="access_type" value="public" checked id="radio-access-public">
+              <input type="radio" name="upload_access_type" value="public" checked id="radio-upload-public">
               <span class="access-option-box">
                 <span class="access-icon">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -347,7 +371,7 @@
               </span>
             </label>
             <label class="access-option-label">
-              <input type="radio" name="access_type" value="pin" id="radio-access-pin">
+              <input type="radio" name="upload_access_type" value="pin" id="radio-upload-pin">
               <span class="access-option-box">
                 <span class="access-icon">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -364,7 +388,7 @@
           </div>
         </div>
 
-        <div id="pin-input-group" class="dialog-field" hidden>
+        <div id="upload-pin-group" class="dialog-field" hidden>
           <label for="upload-pin-code">Set Security PIN</label>
           <input type="text" id="upload-pin-code" class="pin-input-field" maxlength="12" placeholder="e.g. 1234" autocomplete="off" inputmode="numeric">
           <p class="dialog-hint">Users on other devices will need to enter this PIN to unlock and download the file.</p>
@@ -404,6 +428,73 @@
         <div class="dialog-field">
           <label for="link-url-input">Destination URL <span class="required-star">*</span></label>
           <input type="text" id="link-url-input" class="dialog-input" placeholder="https://example.com/resource" required autocomplete="off">
+        </div>
+
+        <div class="dialog-field">
+          <label for="link-duration-select">Visibility Duration</label>
+          <select id="link-duration-select" name="duration" class="duration-select">
+            <option value="604800000" selected>7 days (Default)</option>
+            <option value="259200000">3 days</option>
+            <option value="86400000">24 hours (1 day)</option>
+            <option value="21600000">6 hours</option>
+            <option value="3600000">1 hour</option>
+            <option value="900000">15 minutes</option>
+            <option value="300000">5 minutes</option>
+            <option value="60000">1 minute</option>
+            <option value="custom">Custom duration...</option>
+          </select>
+          <div id="link-custom-duration-group" class="custom-duration-row" hidden>
+            <input type="number" id="link-custom-duration-value" min="1" max="10080" placeholder="Enter time" inputmode="numeric">
+            <select id="link-custom-duration-unit" aria-label="Duration unit">
+              <option value="60000">Minutes</option>
+              <option value="3600000" selected>Hours</option>
+              <option value="86400000">Days</option>
+            </select>
+          </div>
+          <p class="dialog-hint">Defaults to 7 days if unchanged, then deletes automatically.</p>
+        </div>
+
+        <div class="dialog-field">
+          <label>Sharing Security</label>
+          <div class="access-options">
+            <label class="access-option-label">
+              <input type="radio" name="link_access_type" value="public" checked id="radio-link-public">
+              <span class="access-option-box">
+                <span class="access-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                </span>
+                <span class="access-text">
+                  <strong>Public</strong>
+                  <small>Anyone can open link</small>
+                </span>
+              </span>
+            </label>
+            <label class="access-option-label">
+              <input type="radio" name="link_access_type" value="pin" id="radio-link-pin">
+              <span class="access-option-box">
+                <span class="access-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </span>
+                <span class="access-text">
+                  <strong>PIN Protected</strong>
+                  <small>Requires a PIN to open</small>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div id="link-pin-group" class="dialog-field" hidden>
+          <label for="link-pin-code">Set Security PIN</label>
+          <input type="text" id="link-pin-code" class="pin-input-field" maxlength="12" placeholder="e.g. 1234" autocomplete="off" inputmode="numeric">
+          <p class="dialog-hint">Users must enter this PIN to view or open the destination URL.</p>
         </div>
 
         <div class="dialog-actions">
@@ -466,7 +557,7 @@
           </div>
         </div>
 
-        <div class="text-dialog-options">
+        <div class="dialog-field text-dialog-options">
           <div class="text-dialog-opt-title">
             <label for="quick-text-title" class="visually-hidden">Optional file title</label>
             <input type="text" id="quick-text-title" name="title" class="quick-meta-input" placeholder="Title (optional)" maxlength="120" autocomplete="off">
@@ -485,10 +576,73 @@
               <option value="css">.css</option>
             </select>
           </div>
-          <div>
-            <label for="quick-text-pin" class="visually-hidden">Optional security PIN</label>
-            <input type="text" id="quick-text-pin" name="pin" class="quick-meta-input quick-meta-pin" placeholder="PIN (optional)" maxlength="12" inputmode="numeric" autocomplete="off">
+        </div>
+
+        <div class="dialog-field">
+          <label for="text-duration-select">Visibility Duration</label>
+          <select id="text-duration-select" name="duration" class="duration-select">
+            <option value="604800000" selected>7 days (Default)</option>
+            <option value="259200000">3 days</option>
+            <option value="86400000">24 hours (1 day)</option>
+            <option value="21600000">6 hours</option>
+            <option value="3600000">1 hour</option>
+            <option value="900000">15 minutes</option>
+            <option value="300000">5 minutes</option>
+            <option value="60000">1 minute</option>
+            <option value="custom">Custom duration...</option>
+          </select>
+          <div id="text-custom-duration-group" class="custom-duration-row" hidden>
+            <input type="number" id="text-custom-duration-value" min="1" max="10080" placeholder="Enter time" inputmode="numeric">
+            <select id="text-custom-duration-unit" aria-label="Duration unit">
+              <option value="60000">Minutes</option>
+              <option value="3600000" selected>Hours</option>
+              <option value="86400000">Days</option>
+            </select>
           </div>
+          <p class="dialog-hint">Defaults to 7 days if unchanged, then deletes automatically.</p>
+        </div>
+
+        <div class="dialog-field">
+          <label>Sharing Security</label>
+          <div class="access-options">
+            <label class="access-option-label">
+              <input type="radio" name="text_access_type" value="public" checked id="radio-text-public">
+              <span class="access-option-box">
+                <span class="access-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                </span>
+                <span class="access-text">
+                  <strong>Public</strong>
+                  <small>Anyone can view and copy</small>
+                </span>
+              </span>
+            </label>
+            <label class="access-option-label">
+              <input type="radio" name="text_access_type" value="pin" id="radio-text-pin">
+              <span class="access-option-box">
+                <span class="access-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
+                </span>
+                <span class="access-text">
+                  <strong>PIN Protected</strong>
+                  <small>Requires a PIN to read</small>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div id="text-pin-group" class="dialog-field" hidden>
+          <label for="text-pin-code">Set Security PIN</label>
+          <input type="text" id="text-pin-code" class="pin-input-field" maxlength="12" placeholder="e.g. 1234" autocomplete="off" inputmode="numeric">
+          <p class="dialog-hint">Users must enter this PIN to read or download the text.</p>
         </div>
 
         <div class="dialog-actions">
@@ -709,6 +863,6 @@
   <script src="js/vendor/xlsx.full.min.js"></script>
 
   <!-- App Bootstrap -->
-  <script type="module" src="js/app.js?v=20261126-textmodal-v17"></script>
+  <script type="module" src="js/app.js?v=20261127-duration-pin-v18"></script>
 </body>
 </html>

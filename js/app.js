@@ -4,8 +4,11 @@
  * sorting, live 7-day countdown, and Supabase / Local storage switching.
  */
 
-import { dbService, getPurgedFileIds } from './db.js?v=20261123-final';
-import { moderationService } from './moderation.js?v=20261123-final';
+import { dbService, getPurgedFileIds, addPurgedFileId } from './db.js?v=20261127-duration-pin-v18';
+import { moderationService } from './moderation.js?v=20261127-duration-pin-v18';
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const MIN_DURATION_MS = 60 * 1000;
 
 // DOM Elements
 const btnNavbarUpload = document.getElementById('btn-navbar-upload');
@@ -512,6 +515,155 @@ async function ensureStorageCapacity(newFileSize) {
   }
 }
 
+function formatDurationLabel(ms) {
+  const safeMs = Math.max(MIN_DURATION_MS, Math.min(SEVEN_DAYS_MS, Number(ms) || SEVEN_DAYS_MS));
+  const totalMinutes = Math.round(safeMs / 60000);
+  if (totalMinutes < 60) {
+    return `${totalMinutes} ${totalMinutes === 1 ? 'minute' : 'minutes'}`;
+  }
+  if (totalMinutes % (24 * 60) === 0) {
+    const days = totalMinutes / (24 * 60);
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+  const hours = totalMinutes / 60;
+  if (Number.isInteger(hours)) {
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  }
+  const wholeHours = Math.floor(totalMinutes / 60);
+  const remMins = totalMinutes % 60;
+  return `${wholeHours}h ${remMins}m`;
+}
+
+function bindDurationAndPinControls(prefix, onDurationChange = null) {
+  const durationSelect = document.getElementById(`${prefix}-duration-select`);
+  const customGroup = document.getElementById(`${prefix}-custom-duration-group`);
+  const customValInput = document.getElementById(`${prefix}-custom-duration-value`);
+  const customUnitSelect = document.getElementById(`${prefix}-custom-duration-unit`);
+  const radioPublic = document.getElementById(`radio-${prefix}-public`);
+  const radioPin = document.getElementById(`radio-${prefix}-pin`);
+  const pinGroup = document.getElementById(`${prefix}-pin-group`);
+  const pinInput = document.getElementById(`${prefix}-pin-code`);
+
+  const computeMs = () => {
+    if (!durationSelect) return SEVEN_DAYS_MS;
+    if (durationSelect.value !== 'custom') {
+      const val = Number(durationSelect.value);
+      return Number.isFinite(val) && val > 0 ? val : SEVEN_DAYS_MS;
+    }
+    const rawNum = Number(customValInput ? customValInput.value : 0);
+    const unitMs = Number(customUnitSelect ? customUnitSelect.value : 3600000);
+    if (!Number.isFinite(rawNum) || rawNum <= 0) return NaN;
+    return rawNum * unitMs;
+  };
+
+  const notifyDurationChange = () => {
+    if (!onDurationChange) return;
+    const ms = computeMs();
+    if (Number.isFinite(ms) && ms >= MIN_DURATION_MS && ms <= SEVEN_DAYS_MS) {
+      onDurationChange(formatDurationLabel(ms));
+    } else if (durationSelect && durationSelect.value === 'custom') {
+      onDurationChange('custom time');
+    }
+  };
+
+  if (durationSelect) {
+    durationSelect.onchange = () => {
+      const isCustom = durationSelect.value === 'custom';
+      if (customGroup) customGroup.hidden = !isCustom;
+      if (customValInput) {
+        customValInput.setCustomValidity('');
+        if (isCustom && !customValInput.value) {
+          customValInput.value = '2';
+        }
+        if (isCustom) customValInput.focus();
+      }
+      notifyDurationChange();
+    };
+  }
+
+  if (customValInput) {
+    customValInput.oninput = () => {
+      customValInput.setCustomValidity('');
+      notifyDurationChange();
+    };
+  }
+  if (customUnitSelect) {
+    customUnitSelect.onchange = () => {
+      if (customValInput) customValInput.setCustomValidity('');
+      notifyDurationChange();
+    };
+  }
+
+  const handleRadioChange = () => {
+    const isPin = Boolean(radioPin && radioPin.checked);
+    if (pinGroup) pinGroup.hidden = !isPin;
+    if (pinInput) {
+      pinInput.setCustomValidity('');
+      if (isPin) pinInput.focus();
+    }
+  };
+
+  if (radioPublic) radioPublic.onchange = handleRadioChange;
+  if (radioPin) radioPin.onchange = handleRadioChange;
+  if (pinInput) {
+    pinInput.oninput = () => pinInput.setCustomValidity('');
+  }
+
+  const reset = () => {
+    if (durationSelect) durationSelect.value = String(SEVEN_DAYS_MS);
+    if (customGroup) customGroup.hidden = true;
+    if (customValInput) {
+      customValInput.value = '';
+      customValInput.setCustomValidity('');
+    }
+    if (customUnitSelect) customUnitSelect.value = '3600000';
+    if (radioPublic) radioPublic.checked = true;
+    if (radioPin) radioPin.checked = false;
+    if (pinGroup) pinGroup.hidden = true;
+    if (pinInput) {
+      pinInput.value = '';
+      pinInput.setCustomValidity('');
+    }
+    notifyDurationChange();
+  };
+
+  const getOptions = () => {
+    const ms = computeMs();
+    if (!Number.isFinite(ms) || ms < MIN_DURATION_MS || ms > SEVEN_DAYS_MS) {
+      if (customValInput) {
+        customValInput.setCustomValidity('Please enter a duration between 1 minute and 7 days.');
+        customValInput.reportValidity();
+        customValInput.focus();
+      }
+      showToast('Duration must be between 1 minute and 7 days.', 'error');
+      return { valid: false };
+    }
+
+    let pin = null;
+    if (radioPin && radioPin.checked) {
+      pin = pinInput ? pinInput.value.trim() : '';
+      if (!pin) {
+        if (pinInput) {
+          pinInput.setCustomValidity('Please enter a security PIN or select Public.');
+          pinInput.reportValidity();
+          pinInput.focus();
+        }
+        showToast('Please enter a PIN or select Public.', 'error');
+        return { valid: false };
+      }
+    }
+
+    return {
+      valid: true,
+      durationMs: Math.round(ms),
+      durationLabel: formatDurationLabel(ms),
+      pin
+    };
+  };
+
+  return { reset, getOptions, getDurationLabel: () => formatDurationLabel(computeMs()) };
+}
+
 function promptUploadOptions(initialFile) {
   return new Promise((resolve) => {
     let currentFile = initialFile;
@@ -519,38 +671,22 @@ function promptUploadOptions(initialFile) {
     const uploadModalName = document.getElementById('upload-modal-name');
     const uploadModalMeta = document.getElementById('upload-modal-meta');
     const uploadModalBadge = document.getElementById('upload-modal-badge');
-    const radioPublic = document.getElementById('radio-access-public');
-    const radioPin = document.getElementById('radio-access-pin');
-    const pinGroup = document.getElementById('pin-input-group');
-    const pinInput = document.getElementById('upload-pin-code');
     const uploadForm = document.getElementById('upload-options-form');
     const modalDropzone = document.getElementById('modal-dropzone');
     const modalFilePicker = document.getElementById('modal-file-picker');
 
-    function updateModalCard(f) {
+    function updateModalCard(f, durationLabel = '7 days') {
       const { iconClass, label } = getFileTypeDetails(f.name);
       uploadModalBadge.className = `file-badge ${iconClass}`;
       uploadModalBadge.textContent = label;
       uploadModalName.textContent = f.name;
-      uploadModalMeta.textContent = `${dbService.formatBytes(f.size)} • Auto-purges after 7 days`;
+      uploadModalMeta.textContent = `${dbService.formatBytes(f.size)} • Auto-purges after ${durationLabel}`;
     }
 
-    updateModalCard(currentFile);
-
-    radioPublic.checked = true;
-    radioPin.checked = false;
-    pinGroup.hidden = true;
-    pinInput.value = '';
-
-    const handleRadioChange = () => {
-      pinGroup.hidden = !radioPin.checked;
-      if (radioPin.checked) {
-        pinInput.focus();
-      }
-    };
-
-    radioPublic.onchange = handleRadioChange;
-    radioPin.onchange = handleRadioChange;
+    const controls = bindDurationAndPinControls('upload', (label) => {
+      updateModalCard(currentFile, label);
+    });
+    controls.reset();
 
     // In-Modal Drag & Drop & Browse
     if (modalDropzone && modalFilePicker) {
@@ -567,14 +703,14 @@ function promptUploadOptions(initialFile) {
         modalDropzone.classList.remove('dragover');
         if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
           currentFile = e.dataTransfer.files[0];
-          updateModalCard(currentFile);
+          updateModalCard(currentFile, controls.getDurationLabel());
         }
       };
 
       modalFilePicker.onchange = () => {
         if (modalFilePicker.files && modalFilePicker.files.length > 0) {
           currentFile = modalFilePicker.files[0];
-          updateModalCard(currentFile);
+          updateModalCard(currentFile, controls.getDurationLabel());
           modalFilePicker.value = '';
         }
       };
@@ -582,26 +718,19 @@ function promptUploadOptions(initialFile) {
 
     const handleSubmit = (e) => {
       e.preventDefault();
+      const opts = controls.getOptions();
+      if (!opts.valid) return;
+
       uploadForm.removeEventListener('submit', handleSubmit);
       uploadDialog.removeEventListener('close', handleCancel);
-
-      let pin = null;
-      if (radioPin.checked) {
-        pin = pinInput.value.trim();
-        if (!pin) {
-          showToast('Please enter a PIN or select Public.', 'error');
-          return;
-        }
-      }
-
       uploadDialog.close();
-      resolve({ proceed: true, file: currentFile, pin });
+      resolve({ proceed: true, file: currentFile, pin: opts.pin, durationMs: opts.durationMs });
     };
 
     const handleCancel = () => {
       uploadForm.removeEventListener('submit', handleSubmit);
       uploadDialog.removeEventListener('close', handleCancel);
-      resolve({ proceed: false, file: null, pin: null });
+      resolve({ proceed: false, file: null, pin: null, durationMs: SEVEN_DAYS_MS });
     };
 
     uploadForm.addEventListener('submit', handleSubmit);
@@ -618,14 +747,14 @@ async function handleFiles(files) {
       showToast(`"${file.name}" exceeds 100 MB limit.`, 'error');
       continue;
     }
-    const { proceed, file: chosenFile, pin } = await promptUploadOptions(file);
+    const { proceed, file: chosenFile, pin, durationMs } = await promptUploadOptions(file);
     if (proceed && chosenFile) {
-      await uploadSingleFile(chosenFile, pin);
+      await uploadSingleFile(chosenFile, pin, durationMs);
     }
   }
 }
 
-async function uploadSingleFile(file, pin = null) {
+async function uploadSingleFile(file, pin = null, durationMs = SEVEN_DAYS_MS) {
   // 1. Ensure storage capacity (FIFO Auto-Purge oldest files if database becomes full)
   try {
     await ensureStorageCapacity(file.size);
@@ -674,7 +803,7 @@ async function uploadSingleFile(file, pin = null) {
       if (tracerSize) tracerSize.textContent = `${formattedLoaded} / ${formattedTotal}`;
       if (tracerSpeed) tracerSpeed.textContent = formattedSpeed;
       if (tracerEta) tracerEta.textContent = formattedEta;
-    }, pin);
+    }, pin, durationMs);
 
     uploadWidgetTitle.textContent = 'Upload Complete';
     if (widgetFilePercent) widgetFilePercent.textContent = '100%';
@@ -683,8 +812,12 @@ async function uploadSingleFile(file, pin = null) {
     if (tracerEta) tracerEta.textContent = 'Saved';
     if (pulseDot) pulseDot.style.backgroundColor = '#4ade80';
 
+    const durationLabel = formatDurationLabel(durationMs);
     announcePolitely(`Uploaded ${file.name} successfully`);
-    showToast(pin ? `Shared "${file.name}" (PIN Protected)!` : `Shared "${file.name}" for 7 days!`, 'success');
+    showToast(
+      pin ? `Shared "${file.name}" for ${durationLabel} (PIN Protected)!` : `Shared "${file.name}" for ${durationLabel}!`,
+      'success'
+    );
 
     // Instantly add to dashboard runtime so it views instantly!
     const existingIdx = activeFiles.findIndex(f => f.id === uploaded.id);
@@ -695,6 +828,7 @@ async function uploadSingleFile(file, pin = null) {
     }
     renderFilesTable();
     updateFooterStorageTracker();
+    startCountdownTicker();
 
     // Auto open share modal
     openShareDialog(uploaded);
@@ -730,10 +864,16 @@ async function uploadSingleFile(file, pin = null) {
   }
 }
 
+let textControlsController = null;
+
 function openTextDialog(prefillText = null) {
   const textDialog = document.getElementById('text-dialog');
   const input = document.getElementById('quick-text-input');
   if (!textDialog || !input) return;
+
+  if (textControlsController) {
+    textControlsController.reset();
+  }
 
   if (typeof prefillText === 'string') {
     input.value = prefillText;
@@ -788,12 +928,13 @@ function setupQuickTextShare() {
   const textarea = document.getElementById('quick-text-input');
   const titleInput = document.getElementById('quick-text-title');
   const extSelect = document.getElementById('quick-text-ext');
-  const pinInput = document.getElementById('quick-text-pin');
   const statsLabel = document.getElementById('quick-text-stats');
   const clearBtn = document.getElementById('btn-quick-text-clear');
   const submitBtn = document.getElementById('btn-quick-share');
 
   if (!form || !textarea) return;
+
+  textControlsController = bindDurationAndPinControls('text');
 
   const syncGrowAndStats = () => {
     const val = textarea.value;
@@ -811,7 +952,7 @@ function setupQuickTextShare() {
     textarea.value = '';
     textarea.setCustomValidity('');
     if (titleInput) titleInput.value = '';
-    if (pinInput) pinInput.value = '';
+    if (textControlsController) textControlsController.reset();
     syncGrowAndStats();
   };
 
@@ -851,9 +992,11 @@ function setupQuickTextShare() {
       return;
     }
 
+    const opts = textControlsController ? textControlsController.getOptions() : { valid: true, pin: null, durationMs: SEVEN_DAYS_MS };
+    if (!opts.valid) return;
+
     const ext = extSelect ? extSelect.value : 'txt';
     const filename = deriveQuickTextFilename(rawText, titleInput ? titleInput.value : '', ext);
-    const pin = pinInput && pinInput.value.trim() ? pinInput.value.trim() : null;
     const textFile = new File([rawText], filename, { type: 'text/plain' });
 
     if (submitBtn) submitBtn.disabled = true;
@@ -861,7 +1004,7 @@ function setupQuickTextShare() {
       if (textDialog && textDialog.open) {
         textDialog.close();
       }
-      await uploadSingleFile(textFile, pin);
+      await uploadSingleFile(textFile, opts.pin, opts.durationMs);
       resetComposeBox();
     } finally {
       if (submitBtn) submitBtn.disabled = false;
@@ -876,6 +1019,8 @@ function openLinkDialog(initialUrl = '') {
 
   if (!linkDialog || !linkForm || !urlInput) return;
 
+  const controls = bindDurationAndPinControls('link');
+  controls.reset();
   urlInput.value = initialUrl;
 
   const handleSubmit = async (e) => {
@@ -896,10 +1041,13 @@ function openLinkDialog(initialUrl = '') {
       return;
     }
 
-    linkForm.removeEventListener('submit', handleSubmit);
+    const opts = controls.getOptions();
+    if (!opts.valid) return;
+
+    linkForm.onsubmit = null;
     linkDialog.close();
 
-    await uploadSingleLink(normalized);
+    await uploadSingleLink(normalized, opts.pin, opts.durationMs);
   };
 
   linkForm.onsubmit = handleSubmit;
@@ -911,7 +1059,7 @@ function openLinkDialog(initialUrl = '') {
   }, 60);
 }
 
-async function uploadSingleLink(url) {
+async function uploadSingleLink(url, pin = null, durationMs = SEVEN_DAYS_MS) {
   uploadWidget.hidden = false;
   uploadWidgetTitle.textContent = 'Saving Link';
   const websiteName = extractDomain(url) || url.replace(/^https?:\/\//i, '').split('/')[0];
@@ -935,7 +1083,7 @@ async function uploadSingleLink(url) {
   widgetFileIcon.textContent = 'LINK';
 
   try {
-    const uploaded = await dbService.uploadLink(url, websiteName);
+    const uploaded = await dbService.uploadLink(url, websiteName, pin, durationMs);
     uploaded.name = websiteName;
 
     uploadWidgetTitle.textContent = 'Link Saved';
@@ -945,8 +1093,12 @@ async function uploadSingleLink(url) {
     if (tracerEta) tracerEta.textContent = 'Saved';
     if (pulseDot) pulseDot.style.backgroundColor = '#4ade80';
 
+    const durationLabel = formatDurationLabel(durationMs);
     announcePolitely(`Shared link ${websiteName} successfully`);
-    showToast(`Shared link "${websiteName}" for 7 days!`, 'success');
+    showToast(
+      pin ? `Shared link "${websiteName}" for ${durationLabel} (PIN Protected)!` : `Shared link "${websiteName}" for ${durationLabel}!`,
+      'success'
+    );
 
     const existingIdx = activeFiles.findIndex(f => f.id === uploaded.id);
     if (existingIdx >= 0) {
@@ -956,6 +1108,7 @@ async function uploadSingleLink(url) {
     }
     renderFilesTable();
     updateFooterStorageTracker();
+    startCountdownTicker();
 
     openShareDialog(uploaded);
 
@@ -1248,31 +1401,62 @@ function updateFooterDbMode(mode) {
 }
 
 function startCountdownTicker() {
-  if (countdownTimerId) clearInterval(countdownTimerId);
+  if (countdownTimerId) clearTimeout(countdownTimerId);
 
-  // Update countdown timers every 30 seconds
-  countdownTimerId = setInterval(() => {
+  const scheduleNext = () => {
+    const now = Date.now();
+    const hasShortItem = (activeFiles || []).some((f) => {
+      const diff = new Date(f.expiresAt).getTime() - now;
+      return diff > 0 && diff <= 120000;
+    });
+    countdownTimerId = setTimeout(tick, hasShortItem ? 1000 : 15000);
+  };
+
+  const tick = async () => {
+    const now = Date.now();
+    const expiredItems = [];
+
+    for (const file of (activeFiles || [])) {
+      if (new Date(file.expiresAt).getTime() <= now) {
+        expiredItems.push(file);
+      }
+    }
+
+    if (expiredItems.length > 0) {
+      const expiredIds = new Set(expiredItems.map(f => String(f.id)));
+      activeFiles = activeFiles.filter(f => !expiredIds.has(String(f.id)));
+      expiredItems.forEach(f => addPurgedFileId(f.id));
+      renderFilesTable();
+      updateFooterStorageTracker();
+
+      const expiredShareUrlMatch = shareUrlInput && Array.from(expiredIds).some(id => shareUrlInput.value.includes(encodeURIComponent(id)));
+      if (shareDialog && shareDialog.open && expiredShareUrlMatch) {
+        shareDialog.close();
+      }
+
+      // Actively delete expired records & storage objects from database
+      dbService.purgeExpiredFiles(expiredItems).catch((e) => console.warn('Auto-purge error:', e));
+      announcePolitely(`${expiredItems.length} expired ${expiredItems.length === 1 ? 'item' : 'items'} automatically removed.`);
+    }
+
     const badges = document.querySelectorAll('.expires-pill[data-expires]');
-    let hasExpiredAny = false;
-
     badges.forEach((badge) => {
       const expires = badge.getAttribute('data-expires');
       if (expires) {
         const { countdownText, badgeStyle, isExpired } = getCountdownBadgeInfo(expires);
-        if (isExpired) {
-          hasExpiredAny = true;
-        } else {
+        if (!isExpired) {
           badge.className = `expires-pill ${badgeStyle}`;
+          badge.title = `Auto-purges in ${countdownText}`;
           const label = badge.querySelector('.countdown-label');
           if (label) label.textContent = countdownText;
         }
       }
     });
 
-    if (hasExpiredAny) {
-      refreshFilesList();
-    }
-  }, 30000);
+    scheduleNext();
+  };
+
+  scheduleNext();
 }
 
 // ==========================================
@@ -2431,6 +2615,7 @@ function getCountdownBadgeInfo(expiresAtStr) {
     return { countdownText: 'Expired', badgeStyle: 'danger', isExpired: true };
   }
 
+  const totalSeconds = Math.ceil(diffMs / 1000);
   const hours = Math.floor(diffMs / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   const remHours = hours % 24;
@@ -2441,8 +2626,10 @@ function getCountdownBadgeInfo(expiresAtStr) {
     countdownText = `${days}d ${remHours}h`;
   } else if (hours > 0) {
     countdownText = `${hours}h ${minutes}m`;
-  } else {
+  } else if (totalSeconds >= 60) {
     countdownText = `${Math.max(1, minutes)}m`;
+  } else {
+    countdownText = `${Math.max(1, totalSeconds)}s`;
   }
 
   let badgeStyle = '';
