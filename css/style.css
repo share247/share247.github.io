@@ -50,10 +50,8 @@
 
 html, body {
   width: 100%;
-  min-height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scroll-behavior: smooth;
+  height: 100%;
+  overflow: hidden;
   font-family: var(--font-family);
   background-color: var(--bg-app);
   color: var(--text-primary);
@@ -102,8 +100,6 @@ button {
    TOP NAVIGATION BAR (Only Navbar, No Footer, No Sidebar)
    ========================================================================== */
 .navbar {
-  position: sticky;
-  top: 0;
   height: 64px;
   background-color: var(--bg-app);
   border-bottom: 1px solid var(--border-subtle);
@@ -113,7 +109,7 @@ button {
   padding: 0 1.25rem;
   gap: 1.5rem;
   flex-shrink: 0;
-  z-index: 30;
+  z-index: 20;
 }
 
 .nav-left {
@@ -351,18 +347,6 @@ button {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: visible;
-  background-color: var(--bg-app);
-}
-
-/* Above-the-fold Cloud Vault Workspace */
-.vault-workspace {
-  position: relative;
-  height: calc(100vh - 64px);
-  height: calc(100dvh - 64px);
-  min-height: 460px;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
   background-color: var(--bg-app);
 }
@@ -383,24 +367,6 @@ button {
   color: var(--accent-cyan);
   background-color: var(--bg-surface-hover);
   border-color: var(--border-subtle);
-}
-
-.workspace-storage-bar {
-  position: relative;
-  height: 3px;
-  width: 100%;
-  background-color: #0e1014;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.workspace-storage-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 0%;
-  background: linear-gradient(90deg, #991b1b, #dc2626, #ef4444);
-  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
 }
 
 /* Subnav / Title bar */
@@ -3176,231 +3142,9 @@ dialog::backdrop {
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* ==========================================================================
-   SEO FEATURES, SUPPORTED PREVIEWS & FAQ SHOWCASE (Below Initial Fold)
-   ========================================================================== */
-.seo-showcase {
-  content-visibility: auto;
-  contain-intrinsic-block-size: auto 44rem;
-  background: radial-gradient(circle at top center, rgba(56, 189, 248, 0.055) 0%, transparent 55%), #0f1014;
-  border-top: 1px solid var(--border-subtle);
-  padding: 4rem 1.5rem 4.5rem;
-}
-
-.seo-container {
-  max-width: 1080px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2.75rem;
-}
-
-.seo-hero-header {
-  max-width: 760px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.seo-hero-header h2 {
-  font-size: clamp(1.5rem, 2.8vw, 2.1rem);
-  font-weight: 700;
-  color: #f8fafc;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.seo-hero-header p {
-  margin: 0.9rem auto 1.65rem;
-  font-size: 1rem;
-  line-height: 1.65;
-  color: var(--text-secondary);
-}
-
-.seo-cta-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.75rem;
-}
-
-.seo-cta-row .btn-upload,
-.seo-cta-row .btn-add-text,
-.seo-cta-row .btn-add-link,
-.seo-cta-row .btn-action-secondary {
-  height: 40px;
-  width: auto;
-  padding: 0 1.1rem;
-}
-
-.seo-cta-row .btn-upload span,
-.seo-cta-row .btn-add-text span,
-.seo-cta-row .btn-add-link span {
-  display: inline;
-}
-
-.seo-feature-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 1rem;
-}
-
-.seo-card {
-  background-color: #16181d;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  padding: 1.35rem;
-  transition: border-color 0.2s ease, transform 0.2s ease;
-}
-
-.seo-card:hover {
-  border-color: rgba(56, 189, 248, 0.35);
-  transform: translateY(-2px);
-}
-
-.seo-card h3 {
-  font-size: 1.025rem;
-  font-weight: 600;
-  color: #f1f5f9;
-  margin-bottom: 0.55rem;
-}
-
-.seo-card p {
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-
-.seo-card code,
-.seo-formats-list code {
-  font-family: var(--font-mono);
-  font-size: 0.82em;
-  color: #7dd3fc;
-  background-color: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  border-radius: 4px;
-  padding: 0.08rem 0.32rem;
-}
-
-.seo-formats-box {
-  background-color: #16181d;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  padding: 1.5rem 1.75rem;
-}
-
-.seo-formats-box h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #f8fafc;
-  margin-bottom: 1rem;
-}
-
-.seo-formats-list {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 0.9rem 1.5rem;
-}
-
-.seo-formats-list li {
-  position: relative;
-  padding-left: 1.15rem;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-
-.seo-formats-list li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.58rem;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--accent-cyan);
-}
-
-.seo-formats-list strong {
-  color: #f1f5f9;
-}
-
-.seo-faq h2 {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: #f8fafc;
-  margin-bottom: 1rem;
-  letter-spacing: -0.01em;
-}
-
-.seo-faq-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
-
-.seo-faq-list details {
-  background-color: #16181d;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.seo-faq-list details[open] {
-  border-color: rgba(56, 189, 248, 0.38);
-  background-color: #191c22;
-}
-
-.seo-faq-list summary {
-  padding: 1rem 1.25rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #f1f5f9;
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.seo-faq-list summary::-webkit-details-marker {
-  display: none;
-}
-
-.seo-faq-list summary::after {
-  content: "+";
-  font-size: 1.15rem;
-  font-weight: 500;
-  color: var(--accent-cyan);
-  flex-shrink: 0;
-  line-height: 1;
-}
-
-.seo-faq-list details[open] summary::after {
-  content: "\2212";
-}
-
-.seo-faq-list details p {
-  padding: 0 1.25rem 1.15rem;
-  font-size: 0.9rem;
-  line-height: 1.65;
-  color: var(--text-secondary);
-}
-
 @media (max-width: 600px) {
   .subnav-guide-link {
     display: none;
-  }
-  .vault-workspace {
-    min-height: 400px;
-  }
-  .seo-showcase {
-    padding: 2.75rem 1rem 3.25rem;
-  }
-  .seo-formats-box {
-    padding: 1.2rem;
   }
 }
 

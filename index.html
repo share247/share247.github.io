@@ -41,9 +41,9 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'/%3E%3C/svg%3E">
   <link rel="alternate icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
   <link rel="apple-touch-icon" sizes="192x192" href="assets/icon-192.png">
-  <link rel="stylesheet" href="css/style.css?v=20261127-seo-v19">
+  <link rel="stylesheet" href="css/style.css?v=20261127-seo-v20">
 
-  <!-- Structured Data (Schema.org WebSite, WebApplication & FAQPage) -->
+  <!-- Structured Data (Schema.org WebSite & WebApplication) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -92,52 +92,6 @@
           "name": "M0stafa",
           "url": "https://www.linkedin.com/in/m0stafa-kamal"
         }
-      },
-      {
-        "@type": "FAQPage",
-        "@id": "https://share247.github.io/#faq",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "Do I need an account to share files, text, or links on Share247?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "No registration or login is required. You can immediately upload files up to 100 MB, paste text or source code, or share a web URL and copy a direct shareable link."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How long do shared files stay visible before automatic deletion?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "By default, shared files, text snippets, and links remain visible for 7 days and are automatically deleted once expired. You can also choose custom visibility timers from 1 minute up to 7 days when uploading."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Can I password-protect or PIN-lock a shared file, link, or text?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. Every upload dialog for files, links, and pasted text includes a Sharing Security option where you can set an optional PIN code required before anyone can preview, copy, or download the item."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Which file formats can be previewed directly in the browser?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Share247 previews Excel spreadsheets (.xlsx, .xls, .csv), PDF documents, Office files (.docx, .pptx), images, audio and video, and source code or plain text (.txt, .text, .cpp, .c, .py, .js, .json, .md) with line numbers and syntax highlighting."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What is the maximum file size allowed per upload?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "You can upload individual files up to 100 MB in size. When overall vault space fills up, older items are automatically cleared to make room for new shares."
-            }
-          }
-        ]
       }
     ]
   }
@@ -202,18 +156,17 @@
     </div>
   </header>
 
-  <!-- Main Vault Workspace & Features -->
+  <!-- Main Full-Viewport Vault Table -->
   <main class="vault-main" id="main-content">
-    <section class="vault-workspace" aria-labelledby="main-heading">
-      <!-- Table Subheader -->
-      <div class="vault-subnav">
-        <div class="subnav-left">
-          <h1 id="main-heading" class="view-title" tabindex="-1">Public Cloud Vault &mdash; Files, Text &amp; Links</h1>
-          <span class="view-subtitle">&bull; Auto-deletes after custom timer or 7 days</span>
-        </div>
-        <div class="subnav-right">
-          <a href="#about-share247" class="subnav-guide-link">Features &amp; FAQ</a>
-          <span id="files-counter" class="item-count">0 items</span>
+    <!-- Table Subheader -->
+    <div class="vault-subnav">
+      <div class="subnav-left">
+        <h1 id="main-heading" class="view-title" tabindex="-1">Public Cloud Vault</h1>
+        <span class="view-subtitle">&bull; Temporary public storage (custom timer or 7 days default)</span>
+      </div>
+      <div class="subnav-right">
+        <a href="home/" class="subnav-guide-link" title="Learn about Share247 features and FAQ">Features &amp; FAQ</a>
+        <span id="files-counter" class="item-count">0 items</span>
           <button id="btn-refresh" class="subnav-btn" type="button" aria-label="Refresh files list">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="23 4 23 10 17 10"></polyline>
@@ -329,114 +282,6 @@
         </div>
       </div>
     </div>
-
-      <!-- Thin Top-Fold Live Storage Trace Bar -->
-      <div class="workspace-storage-bar" aria-hidden="true">
-        <div id="workspace-storage-fill" class="workspace-storage-fill" style="width: 0%;"></div>
-      </div>
-    </section>
-
-    <!-- SEO Features, Supported Previews & FAQ Section (Below Initial App Fold) -->
-    <section id="about-share247" class="seo-showcase" aria-labelledby="seo-features-heading">
-      <div class="seo-container">
-        <div class="seo-hero-header">
-          <h2 id="seo-features-heading">Free Anonymous File, Text &amp; Link Sharing</h2>
-          <p>
-            Share247 is a fast temporary cloud vault for instant file transfers up to 100 MB, pasted text and code snippets, and web links with zero registration required. Set a custom expiration timer from 1 minute to 7 days and optionally protect any shared item with a security PIN.
-          </p>
-          <div class="seo-cta-row">
-            <button type="button" id="btn-seo-upload" class="btn-upload">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span>Upload File</span>
-            </button>
-            <button type="button" id="btn-seo-text" class="btn-add-text">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-              </svg>
-              <span>Share Text / Code</span>
-            </button>
-            <button type="button" id="btn-seo-link" class="btn-add-link">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-              </svg>
-              <span>Share Link</span>
-            </button>
-            <button type="button" id="btn-share-site" class="btn-action-secondary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="18" cy="5" r="3"></circle>
-                <circle cx="6" cy="12" r="3"></circle>
-                <circle cx="18" cy="19" r="3"></circle>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-              </svg>
-              <span>Share Share247</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="seo-feature-grid">
-          <article class="seo-card">
-            <h3>Up to 100 MB File Upload</h3>
-            <p>Drag and drop any document, archive, media file, or dataset directly into the vault for an instant direct download and preview link.</p>
-          </article>
-          <article class="seo-card">
-            <h3>Paste Text &amp; Code Viewer</h3>
-            <p>Share notes or code in <code>.txt</code>, <code>.cpp</code>, <code>.c</code>, <code>.py</code>, <code>.js</code>, <code>.json</code>, and <code>.md</code> with line numbers, soft wrap toggle, and syntax highlighting.</p>
-          </article>
-          <article class="seo-card">
-            <h3>Custom Auto-Delete Timer</h3>
-            <p>Control visibility duration from 1 minute up to the default 7 days. Expired files, links, and snippets are automatically purged from storage.</p>
-          </article>
-          <article class="seo-card">
-            <h3>Optional PIN Protection</h3>
-            <p>Keep public shares open or lock any file, link, or pasted snippet behind a custom security PIN required on every device before access.</p>
-          </article>
-        </div>
-
-        <div class="seo-formats-box">
-          <h3>Supported In-Browser Previews</h3>
-          <ul class="seo-formats-list">
-            <li><strong>Source Code &amp; Text:</strong> C++, C, Python, JavaScript, TypeScript, JSON, HTML, CSS, Markdown, and plain text files.</li>
-            <li><strong>Spreadsheets &amp; Data:</strong> Multi-sheet Excel workbooks (<code>.xlsx</code>, <code>.xls</code>), CSV, and TSV row-column grid viewer.</li>
-            <li><strong>Documents &amp; Presentations:</strong> Inline PDF viewer plus Word and PowerPoint document rendering.</li>
-            <li><strong>Media &amp; Web Links:</strong> Image lightbox with zoom controls, audio/video playback, and clean destination link cards.</li>
-          </ul>
-        </div>
-
-        <section id="faq" class="seo-faq" aria-labelledby="faq-heading">
-          <h2 id="faq-heading">Frequently Asked Questions</h2>
-          <div class="seo-faq-list">
-            <details name="faq">
-              <summary>Do I need an account to share files, text, or links on Share247?</summary>
-              <p>No registration or login is required. You can immediately upload files up to 100 MB, paste text or source code, or share a web URL and copy a direct shareable link.</p>
-            </details>
-            <details name="faq">
-              <summary>How long do shared files stay visible before automatic deletion?</summary>
-              <p>By default, shared files, text snippets, and links remain visible for 7 days and are automatically deleted once expired. You can also choose custom visibility timers from 1 minute up to 7 days when uploading.</p>
-            </details>
-            <details name="faq">
-              <summary>Can I password-protect or PIN-lock a shared file, link, or text?</summary>
-              <p>Yes. Every upload dialog for files, links, and pasted text includes a Sharing Security option where you can set an optional PIN code required before anyone can preview, copy, or download the item.</p>
-            </details>
-            <details name="faq">
-              <summary>Which file formats can be previewed directly in the browser?</summary>
-              <p>Share247 previews Excel spreadsheets (.xlsx, .xls, .csv), PDF documents, Office files (.docx, .pptx), images, audio and video, and source code or plain text (.txt, .text, .cpp, .c, .py, .js, .json, .md) with line numbers and syntax highlighting.</p>
-            </details>
-            <details name="faq">
-              <summary>What is the maximum file size allowed per upload?</summary>
-              <p>You can upload individual files up to 100 MB in size. When overall vault space fills up, older items are automatically cleared to make room for new shares.</p>
-            </details>
-          </div>
-        </section>
-      </div>
-    </section>
   </main>
 
   <!-- Full-Width Database Storage Trace Footer -->
@@ -1112,6 +957,6 @@
   <div id="live-announcer" role="status" aria-live="polite" class="sr-only"></div>
 
   <!-- App Bootstrap (SheetJS xlsx.full.min.js lazy-loaded only when previewing Excel spreadsheets) -->
-  <script type="module" src="js/app.js?v=20261127-seo-v19" fetchpriority="high"></script>
+  <script type="module" src="js/app.js?v=20261127-seo-v20" fetchpriority="high"></script>
 </body>
 </html>

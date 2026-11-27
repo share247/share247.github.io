@@ -274,32 +274,6 @@ function setupEventListeners() {
     btnEmptyText.addEventListener('click', () => openTextDialog());
   }
 
-  // Below-the-fold SEO Showcase CTA Triggers
-  const btnSeoUpload = document.getElementById('btn-seo-upload');
-  if (btnSeoUpload) {
-    btnSeoUpload.addEventListener('click', () => fileInput.click());
-  }
-
-  const btnSeoText = document.getElementById('btn-seo-text');
-  if (btnSeoText) {
-    btnSeoText.addEventListener('click', () => openTextDialog());
-  }
-
-  const btnSeoLink = document.getElementById('btn-seo-link');
-  if (btnSeoLink) {
-    btnSeoLink.addEventListener('click', () => openLinkDialog());
-  }
-
-  const btnShareSite = document.getElementById('btn-share-site');
-  if (btnShareSite) {
-    btnShareSite.addEventListener('click', () => shareOrCopyLink({
-      title: 'Share247 — Free File, Text & Link Sharing',
-      text: 'Share files up to 100 MB, text/code snippets, or web links anonymously with optional PIN protection.',
-      url: `${window.location.origin}/`,
-      copyToast: 'Share247 link copied to clipboard!'
-    }));
-  }
-
   setupQuickTextShare();
 
   // Copy destination URL button in share modal
@@ -1444,9 +1418,8 @@ function updateFooterStorageTracker() {
   const footerStoragePercent = document.getElementById('footer-storage-percent');
   const footerFilesCount = document.getElementById('footer-files-count');
   const footerStorageFill = document.getElementById('footer-storage-fill');
-  const workspaceStorageFill = document.getElementById('workspace-storage-fill');
 
-  if (!footerStorageFill && !workspaceStorageFill) return;
+  if (!footerStorageFill) return;
 
   const now = Date.now();
   const validFiles = (activeFiles || []).filter((f) => {
@@ -1470,8 +1443,7 @@ function updateFooterStorageTracker() {
   // Red filled space bar expanding across the full footer width
   // Ensure a minimum visible trace of 0.8% if any files exist so the red fill is clearly visible
   const fillWidth = totalBytes > 0 ? Math.max(0.8, percent) : 0;
-  if (footerStorageFill) footerStorageFill.style.width = `${fillWidth}%`;
-  if (workspaceStorageFill) workspaceStorageFill.style.width = `${fillWidth}%`;
+  footerStorageFill.style.width = `${fillWidth}%`;
 
   const vaultFooter = document.getElementById('vault-footer');
   if (vaultFooter) {
@@ -2642,6 +2614,21 @@ async function checkUrlQueryParams() {
     if (searchClear) searchClear.hidden = false;
     renderFilesTable();
     setPageTitle(`Search: ${searchQuery.trim()}`);
+  }
+
+  const actionParam = params.get('action');
+  if (actionParam === 'text' || actionParam === 'link') {
+    try {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('action');
+      window.history.replaceState({}, '', cleanUrl.toString());
+    } catch (_) {}
+
+    if (actionParam === 'text') {
+      openTextDialog();
+    } else if (actionParam === 'link') {
+      openLinkDialog();
+    }
   }
 
   const fileId = params.get('file');
