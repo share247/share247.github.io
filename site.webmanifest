@@ -1,0 +1,29 @@
+{
+  "name": "Share247 — Instant File, Text & Link Sharing",
+  "short_name": "Share247",
+  "description": "Free temporary cloud vault for sharing files up to 100 MB, text snippets, source code, and web links with custom auto-delete timers and optional PIN lock.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121316",
+  "theme_color": "#121316",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

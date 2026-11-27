@@ -9,6 +9,62 @@ import { moderationService } from './moderation.js?v=20261127-duration-pin-v18';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_DURATION_MS = 60 * 1000;
+const DEFAULT_PAGE_TITLE = document.title;
+
+let xlsxLoadPromise = null;
+
+function setPageTitle(customTitle = '') {
+  document.title = customTitle ? `${customTitle} — Share247` : DEFAULT_PAGE_TITLE;
+}
+
+function syncSearchUrlParam(query) {
+  try {
+    const url = new URL(window.location.href);
+    const trimmed = (query || '').trim();
+    if (trimmed) {
+      url.searchParams.set('q', trimmed);
+    } else {
+      url.searchParams.delete('q');
+    }
+    window.history.replaceState({}, '', url.toString());
+  } catch (_) {}
+}
+
+async function shareOrCopyLink({ title, text, url, copyToast }) {
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title, text, url });
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+    }
+  }
+  copyTextToClipboard(url, copyToast);
+}
+
+/**
+ * Lazy-load SheetJS only when a user actually opens an Excel (.xlsx/.xls) preview.
+ */
+function ensureXlsxLoaded() {
+  if (window.XLSX && typeof window.XLSX.read === 'function') {
+    return Promise.resolve(true);
+  }
+  if (xlsxLoadPromise) return xlsxLoadPromise;
+
+  xlsxLoadPromise = new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'js/vendor/xlsx.full.min.js';
+    script.async = true;
+    script.onload = () => resolve(Boolean(window.XLSX && typeof window.XLSX.read === 'function'));
+    script.onerror = () => {
+      xlsxLoadPromise = null;
+      resolve(false);
+    };
+    document.head.appendChild(script);
+  });
+
+  return xlsxLoadPromise;
+}
 
 // DOM Elements
 const btnNavbarUpload = document.getElementById('btn-navbar-upload');
@@ -218,6 +274,32 @@ function setupEventListeners() {
     btnEmptyText.addEventListener('click', () => openTextDialog());
   }
 
+  // Below-the-fold SEO Showcase CTA Triggers
+  const btnSeoUpload = document.getElementById('btn-seo-upload');
+  if (btnSeoUpload) {
+    btnSeoUpload.addEventListener('click', () => fileInput.click());
+  }
+
+  const btnSeoText = document.getElementById('btn-seo-text');
+  if (btnSeoText) {
+    btnSeoText.addEventListener('click', () => openTextDialog());
+  }
+
+  const btnSeoLink = document.getElementById('btn-seo-link');
+  if (btnSeoLink) {
+    btnSeoLink.addEventListener('click', () => openLinkDialog());
+  }
+
+  const btnShareSite = document.getElementById('btn-share-site');
+  if (btnShareSite) {
+    btnShareSite.addEventListener('click', () => shareOrCopyLink({
+      title: 'Share247 — Free File, Text & Link Sharing',
+      text: 'Share files up to 100 MB, text/code snippets, or web links anonymously with optional PIN protection.',
+      url: `${window.location.origin}/`,
+      copyToast: 'Share247 link copied to clipboard!'
+    }));
+  }
+
   setupQuickTextShare();
 
   // Copy destination URL button in share modal
@@ -315,13 +397,18 @@ function setupEventListeners() {
 
   // Search & Filter
   searchInput.addEventListener('input', () => {
-    searchClear.hidden = !searchInput.value;
+    const query = searchInput.value;
+    searchClear.hidden = !query;
+    syncSearchUrlParam(query);
+    setPageTitle(query.trim() ? `Search: ${query.trim()}` : '');
     renderFilesTable();
   });
 
   searchClear.addEventListener('click', () => {
     searchInput.value = '';
     searchClear.hidden = true;
+    syncSearchUrlParam('');
+    setPageTitle('');
     searchInput.focus();
     renderFilesTable();
   });
@@ -365,6 +452,10 @@ function setupEventListeners() {
     dialog.addEventListener('close', () => {
       dialog.scrollLeft = 0;
       pressedOutside = false;
+      if (dialog.id === 'share-dialog' || dialog.id === 'preview-modal') {
+        const activeQuery = searchInput ? searchInput.value.trim() : '';
+        setPageTitle(activeQuery ? `Search: ${activeQuery}` : '');
+      }
     });
     dialog.addEventListener('pointerdown', (e) => {
       pressedOutside = isOutside(e);
@@ -1353,8 +1444,9 @@ function updateFooterStorageTracker() {
   const footerStoragePercent = document.getElementById('footer-storage-percent');
   const footerFilesCount = document.getElementById('footer-files-count');
   const footerStorageFill = document.getElementById('footer-storage-fill');
+  const workspaceStorageFill = document.getElementById('workspace-storage-fill');
 
-  if (!footerStorageFill) return;
+  if (!footerStorageFill && !workspaceStorageFill) return;
 
   const now = Date.now();
   const validFiles = (activeFiles || []).filter((f) => {
@@ -1378,7 +1470,8 @@ function updateFooterStorageTracker() {
   // Red filled space bar expanding across the full footer width
   // Ensure a minimum visible trace of 0.8% if any files exist so the red fill is clearly visible
   const fillWidth = totalBytes > 0 ? Math.max(0.8, percent) : 0;
-  footerStorageFill.style.width = `${fillWidth}%`;
+  if (footerStorageFill) footerStorageFill.style.width = `${fillWidth}%`;
+  if (workspaceStorageFill) workspaceStorageFill.style.width = `${fillWidth}%`;
 
   const vaultFooter = document.getElementById('vault-footer');
   if (vaultFooter) {
@@ -1758,6 +1851,25 @@ function openShareDialog(file) {
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?file=${encodeURIComponent(file.id)}`;
   shareUrlInput.value = shareUrl;
+  setPageTitle(displayName);
+
+  const btnNativeShare = document.getElementById('btn-native-share');
+  if (btnNativeShare) {
+    if (typeof navigator.share === 'function') {
+      btnNativeShare.hidden = false;
+      btnNativeShare.onclick = () => shareOrCopyLink({
+        title: `${displayName} — Share247`,
+        text: isLink
+          ? 'Shared web link via Share247'
+          : `Shared via Share247 (${file.formattedSize || dbService.formatBytes(file.size)})`,
+        url: shareUrl,
+        copyToast: 'Share link copied to clipboard!'
+      });
+    } else {
+      btnNativeShare.hidden = true;
+      btnNativeShare.onclick = null;
+    }
+  }
 
   btnModalDownload.href = '#';
   btnModalDownload.removeAttribute('download');
@@ -1801,6 +1913,7 @@ async function openFilePreview(file) {
   previewModalBadge.className = `file-badge ${iconClass}`;
   previewModalBadge.textContent = label;
   previewModalTitle.textContent = displayName;
+  setPageTitle(displayName);
   previewModalMeta.textContent = `${file.formattedSize || dbService.formatBytes(file.size)} • ${isItemLink ? 'Web Link' : (file.extension || 'file').toUpperCase()} • ${file.downloadsCount || 0} views`;
 
   if (previewDirectOpen) {
@@ -1913,7 +2026,10 @@ async function renderExcelSpreadsheetPreview(file, container, modal) {
       sheetsMap['Sheet1'] = rows;
       sheetNames = ['Sheet1'];
     } else {
-      const buffer = await response.arrayBuffer();
+      const [buffer] = await Promise.all([
+        response.arrayBuffer(),
+        ensureXlsxLoaded()
+      ]);
       if (window.XLSX && typeof window.XLSX.read === 'function') {
         const workbook = window.XLSX.read(buffer, { type: 'array' });
         sheetNames = workbook.SheetNames || ['Sheet1'];
@@ -2520,6 +2636,14 @@ function isTextOrCodeExtension(ext) {
 
 async function checkUrlQueryParams() {
   const params = new URLSearchParams(window.location.search);
+  const searchQuery = params.get('q');
+  if (searchQuery && searchInput) {
+    searchInput.value = searchQuery;
+    if (searchClear) searchClear.hidden = false;
+    renderFilesTable();
+    setPageTitle(`Search: ${searchQuery.trim()}`);
+  }
+
   const fileId = params.get('file');
   if (fileId) {
     try {

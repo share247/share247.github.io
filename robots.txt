@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /admin.html
+Disallow: /database/
+
+Sitemap: https://share247.github.io/sitemap.xml
