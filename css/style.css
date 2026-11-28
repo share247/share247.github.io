@@ -51,6 +51,7 @@
 html, body {
   width: 100%;
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   font-family: var(--font-family);
   background-color: var(--bg-app);
@@ -732,17 +733,17 @@ dialog.text-dialog {
   transform: rotate(180deg);
 }
 
-/* Explicit Rigid Column Allocations (Applied to both th and td) */
+/* Explicit Column Allocations (Sum = 100% so columns never clip on desktop or monitors) */
 .th-name, .cell-name {
-  width: 44%;
-  max-width: 44%;
+  width: 42%;
+  max-width: 42%;
   overflow: hidden;
   text-align: left;
 }
 
 .th-date, .cell-date {
-  width: 22%;
-  max-width: 22%;
+  width: 20%;
+  max-width: 20%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -764,8 +765,8 @@ dialog.text-dialog {
 }
 
 .th-views, .cell-views {
-  width: 8%;
-  max-width: 8%;
+  width: 7%;
+  max-width: 7%;
   white-space: nowrap;
   text-align: left;
 }
@@ -785,9 +786,9 @@ dialog.text-dialog {
 }
 
 .th-actions, .cell-actions {
-  width: 10%;
-  min-width: 110px;
-  max-width: 10%;
+  width: 8%;
+  min-width: 108px;
+  max-width: 8%;
   text-align: right;
   white-space: nowrap;
 }
@@ -816,7 +817,8 @@ dialog.text-dialog {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  max-width: 520px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .row-file-icon {
@@ -1010,7 +1012,8 @@ dialog.text-dialog {
   background: linear-gradient(150deg, #181d26 0%, #0e1117 100%);
   border: 2px dashed #38bdf8;
   border-radius: 24px;
-  padding: 3.5rem 4.5rem;
+  width: min(92dvw, 500px);
+  padding: clamp(1.75rem, 5vw, 3.5rem) clamp(1.25rem, 6vw, 4.5rem);
   text-align: center;
   color: #f8fafc;
   box-shadow: 
@@ -1191,9 +1194,9 @@ dialog {
     0 25px 65px -15px rgba(0, 0, 0, 0.85),
     0 0 40px -10px rgba(56, 189, 248, 0.15);
   max-width: 490px;
-  width: 92%;
-  max-height: 88vh;
-  max-height: 88dvh;
+  width: min(94dvw, 490px);
+  max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   overflow-x: hidden !important;
   overscroll-behavior: contain;
@@ -1861,71 +1864,8 @@ dialog::backdrop {
 }
 
 /* ==========================================================================
-   RESPONSIVE LAYOUT
+   RESPONSIVE LAYOUT BASELINE (Touch hover & access options)
    ========================================================================== */
-@media (max-width: 768px) {
-  .nav-left {
-    min-width: auto;
-  }
-  .brand-name {
-    display: none;
-  }
-  .nav-center {
-    max-width: none;
-  }
-  .th-expires, .cell-expires {
-    display: none;
-  }
-  .th-name, .cell-name {
-    width: 48%;
-  }
-  .th-date, .cell-date {
-    width: 26%;
-  }
-  .th-size, .cell-size {
-    width: 12%;
-  }
-  .th-actions, .cell-actions {
-    width: 14%;
-    min-width: 80px;
-    text-align: right;
-  }
-  /* On mobile/touch devices, ensure row actions are always accessible */
-  .row-hover-actions {
-    opacity: 1 !important;
-  }
-}
-
-@media (max-width: 600px) {
-  .quick-text-shortcut {
-    display: none;
-  }
-  .nav-right {
-    gap: 0.4rem;
-  }
-  .btn-upload {
-    padding: 0 0.85rem;
-    font-size: 0.8125rem;
-  }
-  .btn-add-link,
-  .btn-add-text {
-    padding: 0 0.75rem;
-    font-size: 0.8125rem;
-  }
-}
-
-@media (max-width: 420px) {
-  .btn-upload span, .btn-add-link span, .btn-add-text span {
-    display: none;
-  }
-  .btn-upload, .btn-add-link, .btn-add-text {
-    padding: 0;
-    width: 36px;
-    height: 36px;
-    justify-content: center;
-  }
-}
-
 @media (hover: none) {
   .row-hover-actions {
     opacity: 1 !important;
@@ -2313,26 +2253,7 @@ dialog::backdrop {
   transform: translate(1px, -1px);
 }
 
-@media (max-width: 680px) {
-  .vault-footer {
-    height: auto;
-    padding: 0.6rem 0;
-  }
-  .footer-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.6rem;
-    padding: 0 1rem;
-  }
-  .footer-right {
-    justify-content: flex-end;
-  }
-  .upload-widget.classic-tracer {
-    width: calc(100% - 2rem);
-    right: 1rem;
-    left: 1rem;
-  }
-}
+/* Footer safe-area base handled cleanly in global responsive breakpoints below */
 
 .badge-flagged {
   display: inline-flex;
@@ -3142,9 +3063,374 @@ dialog::backdrop {
   background: rgba(255, 255, 255, 0.15);
 }
 
-@media (max-width: 600px) {
-  .subnav-guide-link {
+/* ==========================================================================
+   COMPREHENSIVE RESPONSIVE BREAKPOINTS (Monitors, Laptops, iPad/Tablets, Phones)
+   ========================================================================== */
+
+/* Large Desktops & Wide Monitors (>= 1600px) */
+@media (min-width: 1600px) {
+  .navbar {
+    padding-inline: 2rem;
+  }
+  .nav-center {
+    max-width: 780px;
+  }
+  .vault-subnav,
+  .footer-content {
+    padding-inline: 2rem;
+  }
+  .vault-table th,
+  .vault-table td {
+    padding-inline: 1.35rem;
+  }
+  .preview-modal {
+    max-width: 1520px;
+    height: 90dvh;
+    max-height: 1040px;
+  }
+}
+
+/* Tablets / iPad Landscape & Narrow Laptops (<= 1100px) */
+@media (max-width: 1100px) {
+  .navbar {
+    gap: 1rem;
+    padding-inline: 1rem;
+  }
+  .nav-left {
+    min-width: auto;
+  }
+  .th-name, .cell-name { width: 40%; max-width: 40%; }
+  .th-date, .cell-date { width: 22%; max-width: 22%; }
+  .th-expires, .cell-expires { width: 13%; max-width: 13%; }
+  .th-size, .cell-size { width: 9%; max-width: 9%; }
+  .th-views, .cell-views { width: 7%; max-width: 7%; }
+  .th-actions, .cell-actions { width: 9%; min-width: 96px; max-width: 9%; }
+  .preview-modal {
+    width: 96dvw;
+    height: 92dvh;
+  }
+}
+
+/* iPad Portrait & Tablets (<= 900px) */
+@media (max-width: 900px) {
+  .view-subtitle {
     display: none;
+  }
+  .vault-subnav {
+    padding-inline: 1rem;
+  }
+  .th-expires, .cell-expires {
+    display: none;
+  }
+  .th-name, .cell-name { width: 44%; max-width: 44%; }
+  .th-date, .cell-date { width: 25%; max-width: 25%; }
+  .th-size, .cell-size { width: 11%; max-width: 11%; }
+  .th-views, .cell-views { width: 8%; max-width: 8%; }
+  .th-actions, .cell-actions { width: 12%; min-width: 96px; max-width: 12%; }
+  .row-hover-actions {
+    opacity: 1 !important;
+  }
+  .btn-upload, .btn-add-link, .btn-add-text {
+    padding: 0 0.85rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* Mobile Devices & Phablets (<= 680px down to 320px) */
+@media (max-width: 680px) {
+  .navbar {
+    height: auto;
+    min-height: 60px;
+    flex-wrap: wrap;
+    padding: 0.65rem max(0.85rem, env(safe-area-inset-right, 0px)) 0.65rem max(0.85rem, env(safe-area-inset-left, 0px));
+    gap: 0.6rem;
+  }
+  .nav-left {
+    min-width: auto;
+    flex-shrink: 0;
+  }
+  .brand-name {
+    font-size: 1.05rem;
+  }
+  .nav-center {
+    flex: 1 1 160px;
+    min-width: 0;
+    max-width: none;
+  }
+  .search-box form {
+    height: 40px;
+    padding: 0 0.85rem;
+  }
+  .nav-right {
+    flex: 1 0 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+  .btn-upload, .btn-add-link, .btn-add-text {
+    width: 100%;
+    height: 40px;
+    padding: 0 0.5rem;
+    justify-content: center;
+    font-size: 0.8125rem;
+  }
+
+  .vault-subnav {
+    height: auto;
+    min-height: 44px;
+    padding: 0.5rem 0.9rem;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .view-title {
+    font-size: 0.95rem;
+  }
+  .subnav-guide-link {
+    display: inline-flex;
+    font-size: 0.75rem;
+    padding: 0.2rem 0.45rem;
+  }
+
+  /* Transform Vault Table into Scannable Mobile Cards while Keeping Column Sorting */
+  .vault-table {
+    display: block;
+    width: 100%;
+    table-layout: auto;
+  }
+  .vault-table thead {
+    display: block;
+    overflow-x: auto;
+    background-color: var(--bg-app);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .vault-table thead tr {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.4rem 0.75rem;
+  }
+  .vault-table thead th {
+    position: static;
+    width: auto !important;
+    max-width: none !important;
+    flex: 0 0 auto;
+    padding: 0.3rem 0.55rem;
+    border-bottom: none;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-surface);
+    font-size: 0.75rem;
+  }
+  .vault-table thead th.th-expires,
+  .vault-table thead th.th-actions {
+    display: none;
+  }
+
+  .vault-table tbody {
+    display: block;
+  }
+  .vault-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.75rem;
+    height: auto;
+    padding: 0.8rem 0.9rem;
+  }
+  .vault-table tbody td {
+    padding: 0;
+    white-space: normal;
+  }
+  .vault-table tbody td.cell-name {
+    flex: 1 0 100%;
+    width: 100%;
+    max-width: 100%;
+  }
+  .cell-name-content {
+    gap: 0.65rem;
+    align-items: flex-start;
+  }
+  .row-file-icon {
+    margin-top: 2px;
+  }
+  .row-filename {
+    white-space: normal;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.4rem;
+    overflow: visible;
+  }
+  .row-filename > span.row-title-text {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.35;
+  }
+  .vault-table tbody td.cell-date,
+  .vault-table tbody td.cell-expires,
+  .vault-table tbody td.cell-size,
+  .vault-table tbody td.cell-views {
+    display: inline-flex;
+    align-items: center;
+    width: auto;
+    max-width: none;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+  }
+  .vault-table tbody td.cell-actions {
+    margin-inline-start: auto;
+    width: auto;
+    min-width: auto;
+    max-width: none;
+  }
+  .row-hover-actions {
+    opacity: 1 !important;
+    gap: 0.3rem;
+  }
+
+  .empty-actions {
+    flex-direction: column;
+    align-items: stretch;
+    padding-inline: 1rem;
+  }
+  .empty-actions > * {
+    width: 100%;
+  }
+
+  /* Footer & Floating Widgets */
+  .vault-footer {
+    height: auto;
+    padding: 0.55rem 0 max(0.55rem, env(safe-area-inset-bottom, 0px));
+  }
+  .footer-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+    padding: 0 0.9rem;
+  }
+  .footer-right {
+    justify-content: space-between;
+  }
+  .upload-widget.classic-tracer {
+    width: calc(100dvw - 1.5rem);
+    right: 0.75rem;
+    left: 0.75rem;
+    bottom: 0.75rem;
+  }
+  .toast-container {
+    right: 0.75rem;
+    left: 0.75rem;
+    bottom: 1rem;
+    align-items: stretch;
+  }
+  .toast {
+    max-width: 100%;
+  }
+
+  /* Fullscreen Mobile Preview Modal & Inner Toolbars */
+  .preview-modal {
+    width: 100dvw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+  .preview-shell {
+    border-radius: 0;
+  }
+  .preview-header {
+    height: auto;
+    min-height: 54px;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.65rem 0.85rem;
+  }
+  .preview-title-group {
+    flex: 1 1 180px;
+  }
+  .preview-header-actions {
+    margin-inline-start: auto;
+    flex-wrap: wrap;
+  }
+  .excel-toolbar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .excel-tabs-wrap {
+    max-width: 100%;
+    width: 100%;
+  }
+  .excel-controls-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .excel-search-box {
+    flex: 1;
+  }
+  .excel-search-input {
+    width: 100%;
+  }
+  .code-toolbar {
+    padding: 0.5rem 0.75rem;
+  }
+  .preview-link-card,
+  .preview-error-state {
+    width: min(92dvw, 520px);
+    padding: 1.5rem 1.25rem;
+  }
+  .preview-image-container {
+    padding: 0.75rem;
+  }
+  .preview-image-toolbar {
+    bottom: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 92dvw;
+  }
+  .quick-text-shortcut {
+    display: none;
+  }
+  .dialog-box {
+    padding: 1.1rem;
+  }
+  .dialog-actions > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* Narrow Phones (<= 440px) */
+@media (max-width: 440px) {
+  .brand-name {
+    display: none;
+  }
+  .vault-table tbody td.cell-actions {
+    flex: 1 0 100%;
+    margin-inline-start: 0;
+    text-align: left;
+  }
+  .row-hover-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Touch Devices: Comfortable Tap Targets (WCAG 2.5.5) */
+@media (pointer: coarse) {
+  .row-action-btn,
+  .subnav-btn,
+  .btn-dialog-close,
+  .btn-preview-close {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .btn-copy-link,
+  .btn-preview-tool,
+  .btn-action-primary,
+  .btn-action-secondary,
+  .btn-action-preview {
+    min-height: 44px;
   }
 }
 

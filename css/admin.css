@@ -560,7 +560,9 @@ body {
   backdrop-filter: blur(8px);
   border: 1px solid var(--admin-border);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-table {
@@ -770,7 +772,11 @@ dialog.admin-modal {
   border-radius: 16px;
   padding: 2rem;
   max-width: 580px;
-  width: 100%;
+  width: min(94dvw, 580px);
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
   margin: auto;
 }
@@ -888,11 +894,6 @@ dialog.admin-modal::backdrop {
 .btn-modal-save:hover {
   background: linear-gradient(135deg, #0369a1, #075985);
 }
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-}
 
 /* Toast Notification */
 .admin-toast-container {
@@ -916,18 +917,186 @@ dialog.admin-modal::backdrop {
   transition: opacity 0.25s;
 }
 
-@media (max-width: 768px) {
+/* Wide Monitors (>= 1600px) */
+@media (min-width: 1600px) {
+  .admin-container {
+    max-width: min(1680px, 94vw);
+  }
+  .item-name-link {
+    max-width: 520px;
+  }
+}
+
+/* Tablets & iPad Landscape/Portrait (<= 1024px) */
+@media (max-width: 1024px) {
   .admin-header {
-    padding: 0.75rem 1rem;
+    padding: 0.85rem 1.25rem;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
   }
   .admin-container {
-    padding: 1rem;
+    padding: 1.25rem;
   }
   .toolbar-section {
     flex-direction: column;
     align-items: stretch;
   }
+  .toolbar-right {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
   .search-box {
+    flex: 1 1 220px;
+  }
+  .alert-banner {
+    flex-wrap: wrap;
+  }
+  .admin-table th,
+  .admin-table td {
+    padding: 0.75rem 0.9rem;
+  }
+  .item-name-link {
+    max-width: 220px;
+  }
+}
+
+/* Mobile & Small Tablets (<= 680px) */
+@media (max-width: 680px) {
+  .admin-header {
+    padding: 0.75rem max(1rem, env(safe-area-inset-right, 0px)) 0.75rem max(1rem, env(safe-area-inset-left, 0px));
+  }
+  .brand-meta h1 {
+    flex-wrap: wrap;
+    font-size: 1rem;
+  }
+  .header-actions {
     width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+  .btn-header {
+    justify-content: center;
+    min-height: 40px;
+  }
+  .admin-container {
+    padding: 1rem;
+  }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+  .filter-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .tab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .toolbar-right {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+  .search-box {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .btn-tool {
+    justify-content: center;
+    min-height: 40px;
+  }
+
+  /* Responsive Card Rows for Admin Table */
+  .table-wrap {
+    background: transparent;
+    border: none;
+    overflow: visible;
+  }
+  .admin-table,
+  .admin-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .admin-table thead {
+    display: none;
+  }
+  .admin-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem 0.75rem;
+    padding: 0.95rem 1rem;
+    margin-bottom: 0.75rem;
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
+    border-radius: 12px;
+  }
+  .admin-table td {
+    padding: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8125rem;
+  }
+  .admin-table td:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+  .admin-table td:nth-child(2) {
+    grid-column: 1 / -1;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .admin-table td:nth-child(3)::before {
+    content: "Size: ";
+    color: var(--admin-text-dim);
+  }
+  .admin-table td:nth-child(5)::before {
+    content: "Expires: ";
+    color: var(--admin-text-dim);
+  }
+  .admin-table td:nth-child(6) {
+    justify-content: flex-end;
+  }
+  .item-name-link {
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  dialog.admin-modal {
+    padding: 1.25rem;
+  }
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+  .modal-actions > * {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+  .admin-toast-container {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .auth-card {
+    padding: 1.5rem 1.25rem;
+  }
+  #settings-form .modal-field > div {
+    flex-wrap: wrap;
+  }
+  #btn-test-gemini-key {
+    width: 100%;
+  }
+}
+
+@media (pointer: coarse) {
+  .action-btn {
+    width: 40px;
+    height: 40px;
   }
 }
