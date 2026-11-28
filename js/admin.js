@@ -4,8 +4,8 @@
  * file management, and instant purge controls for prohibited material.
  */
 
-import { dbService } from './db.js?v=20261127-duration-pin-v18';
-import { moderationService } from './moderation.js?v=20261127-duration-pin-v18';
+import { dbService } from './db.js?v=20261128-mod-v21';
+import { moderationService } from './moderation.js?v=20261128-mod-v21';
 
 // DOM Elements
 const authOverlay = document.getElementById('auth-overlay');
@@ -214,8 +214,9 @@ function setupEventListeners() {
     testKeyStatus.textContent = 'Testing connection...';
     testKeyStatus.style.color = '#38bdf8';
     try {
-      await moderationService.testApiKey(key);
-      testKeyStatus.textContent = 'API key verified & functional!';
+      const check = await moderationService.testApiKey(key);
+      const modelNote = check && check.model ? ` (${check.model})` : '';
+      testKeyStatus.textContent = `API key verified & functional${modelNote}!`;
       testKeyStatus.style.color = '#34d399';
     } catch (err) {
       testKeyStatus.textContent = err.message || 'Verification failed';
@@ -518,6 +519,12 @@ async function handleScanSingleItem(file, triggerBtn) {
       updateMetrics();
       renderVaultTable();
       showAdminToast(`Prohibited content in "${file.name}". Automatically deleted: ${result.reason}`, 'error');
+    } else if (result.status === 'pending' || !result.aiChecked) {
+      file.moderationStatus = 'pending';
+      file.moderationReason = result.reason;
+      updateMetrics();
+      renderVaultTable();
+      showAdminToast(`"${file.name}" could not reach Gemini AI right now (marked UNCHECKED).`, 'info');
     } else {
       file.moderationStatus = result.status;
       file.moderationReason = result.reason;
@@ -707,6 +714,7 @@ async function handleScanAllWithAI() {
   showAdminToast(`Starting Gemini AI screening on ${allVaultFiles.length} item(s)...`, 'info');
 
   let autoDeletedCount = 0;
+  let pendingCount = 0;
   const remainingFiles = [];
   for (const file of allVaultFiles) {
     try {
@@ -714,11 +722,15 @@ async function handleScanAllWithAI() {
       if (res.decision === 'NO' || !res.safe || res.status === 'flagged') {
         autoDeletedCount++;
       } else {
+        if (res.status === 'pending' || !res.aiChecked) {
+          pendingCount++;
+        }
         file.moderationStatus = res.status;
         file.moderationReason = res.reason;
         remainingFiles.push(file);
       }
     } catch (_) {
+      pendingCount++;
       remainingFiles.push(file);
     }
   }
@@ -736,9 +748,11 @@ async function handleScanAllWithAI() {
   renderVaultTable();
 
   if (autoDeletedCount > 0) {
-    showAdminToast(`Audit complete: ${autoDeletedCount} prohibited item(s) detected and automatically deleted.`, 'error');
+    showAdminToast(`Audit complete: ${autoDeletedCount} prohibited item(s) detected and deleted${pendingCount > 0 ? `, ${pendingCount} pending retry` : ''}.`, 'error');
+  } else if (pendingCount > 0) {
+    showAdminToast(`Audit finished: ${pendingCount} item(s) marked UNCHECKED (Gemini temporarily busy — please retry).`, 'info');
   } else {
-    showAdminToast('Audit complete: All vault items approved safe.', 'success');
+    showAdminToast('Audit complete: All vault items verified safe.', 'success');
   }
 }
 

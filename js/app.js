@@ -4,8 +4,8 @@
  * sorting, live 7-day countdown, and Supabase / Local storage switching.
  */
 
-import { dbService, getPurgedFileIds, addPurgedFileId } from './db.js?v=20261127-duration-pin-v18';
-import { moderationService } from './moderation.js?v=20261127-duration-pin-v18';
+import { dbService, getPurgedFileIds, addPurgedFileId } from './db.js?v=20261128-mod-v21';
+import { moderationService } from './moderation.js?v=20261128-mod-v21';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_DURATION_MS = 60 * 1000;
@@ -829,7 +829,7 @@ async function uploadSingleFile(file, pin = null, durationMs = SEVEN_DAYS_MS) {
   }
 
   uploadWidget.hidden = false;
-  uploadWidgetTitle.textContent = 'Uploading File';
+  uploadWidgetTitle.textContent = 'AI Safety Check';
   widgetFileName.textContent = file.name;
 
   const tracerBarFill = document.getElementById('tracer-bar-fill');
@@ -840,17 +840,46 @@ async function uploadSingleFile(file, pin = null, durationMs = SEVEN_DAYS_MS) {
   const pulseDot = document.getElementById('tracer-pulse-dot');
 
   if (pulseDot) pulseDot.style.backgroundColor = '#38bdf8';
-  if (tracerBarFill) tracerBarFill.style.width = '0%';
-  if (widgetFilePercent) widgetFilePercent.textContent = '0%';
+  if (tracerBarFill) tracerBarFill.style.width = '12%';
+  if (widgetFilePercent) widgetFilePercent.textContent = 'Scan';
   if (tracerSize) tracerSize.textContent = `0 B / ${dbService.formatBytes(file.size)}`;
-  if (tracerSpeed) tracerSpeed.textContent = 'Measuring...';
-  if (tracerEta) tracerEta.textContent = 'Calculating...';
+  if (tracerSpeed) tracerSpeed.textContent = 'Screening...';
+  if (tracerEta) tracerEta.textContent = 'AI Safety';
 
   const { iconClass, label } = getFileTypeDetails(file.name);
   widgetFileIcon.className = `widget-badge ${iconClass}`;
   widgetFileIcon.textContent = label;
 
   try {
+    // 1. Pre-Upload Safety Gate: Block threats, nudity, porn, and sex videos/photos BEFORE storing
+    const safetyCheck = await moderationService.inspectUploadCandidate({
+      name: file.name,
+      type: file.type || 'application/octet-stream',
+      size: file.size,
+      formattedSize: dbService.formatBytes(file.size),
+      isLink: false
+    }, file);
+
+    if (!safetyCheck.safe || safetyCheck.decision === 'NO') {
+      uploadWidgetTitle.textContent = 'Upload Blocked';
+      if (widgetFilePercent) widgetFilePercent.textContent = 'Blocked';
+      if (tracerBarFill) tracerBarFill.style.width = '100%';
+      if (tracerSpeed) tracerSpeed.textContent = 'Rejected';
+      if (tracerEta) tracerEta.textContent = 'Unsafe';
+      if (pulseDot) pulseDot.style.backgroundColor = '#ef4444';
+
+      const reason = safetyCheck.reason || 'Prohibited threat, nudity, or explicit content detected';
+      announcePolitely(`Upload blocked: ${file.name}. ${reason}`);
+      showToast(`AI Content Safety blocked "${file.name}": ${reason}`, 'error');
+      return;
+    }
+
+    uploadWidgetTitle.textContent = 'Uploading File';
+    if (tracerBarFill) tracerBarFill.style.width = '0%';
+    if (widgetFilePercent) widgetFilePercent.textContent = '0%';
+    if (tracerSpeed) tracerSpeed.textContent = 'Measuring...';
+    if (tracerEta) tracerEta.textContent = 'Calculating...';
+
     const uploaded = await dbService.uploadFile(file, (telemetry) => {
       if (typeof telemetry === 'number') {
         telemetry = { percent: telemetry };
@@ -869,6 +898,14 @@ async function uploadSingleFile(file, pin = null, durationMs = SEVEN_DAYS_MS) {
       if (tracerSpeed) tracerSpeed.textContent = formattedSpeed;
       if (tracerEta) tracerEta.textContent = formattedEta;
     }, pin, durationMs);
+
+    const modStatus = safetyCheck.aiChecked ? 'safe' : 'pending';
+    const modReason = safetyCheck.aiChecked
+      ? (safetyCheck.reason || 'Approved by AI Content Safety scan')
+      : (safetyCheck.reason || 'AI safety verification pending');
+    uploaded.moderationStatus = modStatus;
+    uploaded.moderationReason = modReason;
+    await dbService.updateModerationStatus(uploaded.id, modStatus, modReason).catch(() => {});
 
     uploadWidgetTitle.textContent = 'Upload Complete';
     if (widgetFilePercent) widgetFilePercent.textContent = '100%';
@@ -897,26 +934,6 @@ async function uploadSingleFile(file, pin = null, durationMs = SEVEN_DAYS_MS) {
 
     // Auto open share modal
     openShareDialog(uploaded);
-
-    // Asynchronous background AI safety scan (Gemini API)
-    moderationService.screenItem(uploaded, file).then(async (modResult) => {
-      if (modResult.decision === 'NO' || !modResult.safe) {
-        // Automatically delete prohibited item from public drive and local state
-        await dbService.deleteFile(uploaded.id, uploaded.storagePath);
-        activeFiles = activeFiles.filter(f => f.id !== uploaded.id);
-        renderFilesTable();
-        updateFooterStorageTracker();
-
-        // Close share modal if open
-        const shareDialog = document.getElementById('share-dialog');
-        if (shareDialog && shareDialog.open) {
-          shareDialog.close();
-        }
-
-        announcePolitely(`Prohibited content detected. "${uploaded.name}" was automatically deleted.`);
-        showToast(`AI Content Safety: "${uploaded.name}" contained prohibited content and was automatically deleted.`, 'error');
-      }
-    }).catch((e) => console.warn('Moderation error:', e));
   } catch (err) {
     console.error('Upload failed:', err);
     uploadWidgetTitle.textContent = 'Upload Failed';
@@ -1126,7 +1143,7 @@ function openLinkDialog(initialUrl = '') {
 
 async function uploadSingleLink(url, pin = null, durationMs = SEVEN_DAYS_MS) {
   uploadWidget.hidden = false;
-  uploadWidgetTitle.textContent = 'Saving Link';
+  uploadWidgetTitle.textContent = 'AI Safety Check';
   const websiteName = extractDomain(url) || url.replace(/^https?:\/\//i, '').split('/')[0];
   widgetFileName.textContent = websiteName;
 
@@ -1138,18 +1155,54 @@ async function uploadSingleLink(url, pin = null, durationMs = SEVEN_DAYS_MS) {
   const pulseDot = document.getElementById('tracer-pulse-dot');
 
   if (pulseDot) pulseDot.style.backgroundColor = '#38bdf8';
-  if (tracerBarFill) tracerBarFill.style.width = '40%';
-  if (widgetFilePercent) widgetFilePercent.textContent = '40%';
+  if (tracerBarFill) tracerBarFill.style.width = '30%';
+  if (widgetFilePercent) widgetFilePercent.textContent = 'Scan';
   if (tracerSize) tracerSize.textContent = 'Web Link';
-  if (tracerSpeed) tracerSpeed.textContent = 'Saving...';
-  if (tracerEta) tracerEta.textContent = 'Instant';
+  if (tracerSpeed) tracerSpeed.textContent = 'Screening...';
+  if (tracerEta) tracerEta.textContent = 'AI Safety';
 
   widgetFileIcon.className = 'widget-badge icon-type-cyan';
   widgetFileIcon.textContent = 'LINK';
 
   try {
+    const safetyCheck = await moderationService.inspectUploadCandidate({
+      name: websiteName,
+      downloadUrl: url,
+      type: 'url',
+      formattedSize: 'Link',
+      isLink: true
+    });
+
+    if (!safetyCheck.safe || safetyCheck.decision === 'NO') {
+      uploadWidgetTitle.textContent = 'Link Blocked';
+      if (widgetFilePercent) widgetFilePercent.textContent = 'Blocked';
+      if (tracerBarFill) tracerBarFill.style.width = '100%';
+      if (tracerSpeed) tracerSpeed.textContent = 'Rejected';
+      if (tracerEta) tracerEta.textContent = 'Unsafe';
+      if (pulseDot) pulseDot.style.backgroundColor = '#ef4444';
+
+      const reason = safetyCheck.reason || 'Prohibited adult, phishing, or threat link detected';
+      announcePolitely(`Link blocked: ${websiteName}. ${reason}`);
+      showToast(`AI Content Safety blocked link "${websiteName}": ${reason}`, 'error');
+      return;
+    }
+
+    uploadWidgetTitle.textContent = 'Saving Link';
+    if (tracerBarFill) tracerBarFill.style.width = '60%';
+    if (widgetFilePercent) widgetFilePercent.textContent = '60%';
+    if (tracerSpeed) tracerSpeed.textContent = 'Saving...';
+    if (tracerEta) tracerEta.textContent = 'Instant';
+
     const uploaded = await dbService.uploadLink(url, websiteName, pin, durationMs);
     uploaded.name = websiteName;
+
+    const modStatus = safetyCheck.aiChecked ? 'safe' : 'pending';
+    const modReason = safetyCheck.aiChecked
+      ? (safetyCheck.reason || 'Approved by AI Content Safety scan')
+      : (safetyCheck.reason || 'AI safety verification pending');
+    uploaded.moderationStatus = modStatus;
+    uploaded.moderationReason = modReason;
+    await dbService.updateModerationStatus(uploaded.id, modStatus, modReason).catch(() => {});
 
     uploadWidgetTitle.textContent = 'Link Saved';
     if (widgetFilePercent) widgetFilePercent.textContent = '100%';
@@ -1176,26 +1229,6 @@ async function uploadSingleLink(url, pin = null, durationMs = SEVEN_DAYS_MS) {
     startCountdownTicker();
 
     openShareDialog(uploaded);
-
-    // Asynchronous background AI safety scan (Gemini API)
-    moderationService.screenItem(uploaded).then(async (modResult) => {
-      if (modResult.decision === 'NO' || !modResult.safe) {
-        // Automatically delete prohibited link from public drive and local state
-        await dbService.deleteFile(uploaded.id, uploaded.storagePath);
-        activeFiles = activeFiles.filter(f => f.id !== uploaded.id);
-        renderFilesTable();
-        updateFooterStorageTracker();
-
-        // Close share modal if open
-        const shareDialog = document.getElementById('share-dialog');
-        if (shareDialog && shareDialog.open) {
-          shareDialog.close();
-        }
-
-        announcePolitely(`Prohibited content detected. "${uploaded.name}" was automatically deleted.`);
-        showToast(`AI Content Safety: "${uploaded.name}" contained prohibited content and was automatically deleted.`, 'error');
-      }
-    }).catch((e) => console.warn('Moderation error:', e));
   } catch (err) {
     console.error('Link save failed:', err);
     uploadWidgetTitle.textContent = 'Save Failed';
