@@ -10,6 +10,27 @@ import { getStoredSupabaseConfig, isSupabaseConfigured } from './config.js';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const PURGED_FILES_KEY = 'share247_purged_file_ids';
 
+function safeDecodeUriComponent(value) {
+  if (typeof value !== 'string') return '';
+  try {
+    return decodeURIComponent(value);
+  } catch (_) {
+    return value;
+  }
+}
+
+function normalizePin(pin) {
+  if (pin == null) return null;
+  const trimmed = String(pin).trim();
+  return trimmed || null;
+}
+
+function buildTypeWithPin(baseType, pin) {
+  const cleanBase = String(baseType || 'application/octet-stream').trim() || 'application/octet-stream';
+  const normalizedPin = normalizePin(pin);
+  return normalizedPin ? `${cleanBase}; pin=${encodeURIComponent(normalizedPin)}` : cleanBase;
+}
+
 export function getPurgedFileIds() {
   try {
     const raw = localStorage.getItem(PURGED_FILES_KEY);
@@ -161,21 +182,26 @@ class DatabaseService {
 
   mapSupabaseRecord(r) {
     if (!r) return null;
-    const rawType = r.type || '';
-    const hasPinInType = rawType.includes('; pin=');
-    const pinVal = r.pin || (hasPinInType ? decodeURIComponent(rawType.split('; pin=')[1]) : null);
+    const rawType = String(r.type || '');
+    const cleanType = rawType.split(';')[0].trim();
 
-    const hasModInType = rawType.includes('; mod=');
+    // Parse '; pin=...' up to the next ';' so appended params like '; mod=safe' never corrupt the PIN
+    const pinMatch = rawType.match(/(?:^|;\s*)pin=([^;]+)/);
+    const colPin = normalizePin(r.pin);
+    const typePin = pinMatch && pinMatch[1] ? normalizePin(safeDecodeUriComponent(pinMatch[1])) : null;
+    const pinVal = colPin || typePin;
+
     let modStatus = r.moderation_status || 'safe';
     let modReason = r.moderation_reason || '';
-    if (hasModInType) {
-      const match = rawType.match(/; mod=([^;]+)/);
-      if (match) modStatus = match[1];
-      const rMatch = rawType.match(/; reason=([^;]+)/);
-      if (rMatch) modReason = decodeURIComponent(rMatch[1]);
+    const modMatch = rawType.match(/(?:^|;\s*)mod=([^;]+)/);
+    if (modMatch && modMatch[1]) {
+      modStatus = modMatch[1].trim();
+    }
+    const reasonMatch = rawType.match(/(?:^|;\s*)reason=([^;]+)/);
+    if (reasonMatch && reasonMatch[1]) {
+      modReason = safeDecodeUriComponent(reasonMatch[1]);
     }
 
-    const cleanType = rawType.split(';')[0];
     const isLink = cleanType === 'url' || cleanType === 'text/x-uri' || r.extension === 'link' || (r.storage_path && r.storage_path.startsWith('link://'));
     const displayName = isLink ? (this.extractDomain(r.name || r.download_url) || r.name) : r.name;
 
@@ -295,7 +321,7 @@ class DatabaseService {
     const expiresAt = this.resolveExpiryIso(durationMs, now);
 
     const cleanType = file.type || 'application/octet-stream';
-    const typeWithPin = pin ? `${cleanType}; pin=${encodeURIComponent(pin)}` : cleanType;
+    const typeWithPin = buildTypeWithPin(cleanType, pin);
 
     // 3. Insert metadata record in 'files' table
     const fileRecord = {
@@ -350,7 +376,7 @@ class DatabaseService {
     const expiresAt = this.resolveExpiryIso(durationMs, now);
 
     const cleanType = 'url';
-    const typeWithPin = pin ? `${cleanType}; pin=${encodeURIComponent(pin)}` : cleanType;
+    const typeWithPin = buildTypeWithPin(cleanType, pin);
     const urlBytes = Math.max(1, new Blob([url]).size);
 
     const record = {
@@ -449,8 +475,8 @@ class DatabaseService {
     }
 
     return (data || [])
-      .filter(r => r.type !== 'deleted' && r.moderation_status !== 'deleted')
-      .map(r => this.mapSupabaseRecord(r));
+      .map(r => this.mapSupabaseRecord(r))
+      .filter(item => item && item.type !== 'deleted' && item.moderationStatus !== 'deleted');
   }
 
   async getFileByIdFromSupabase(fileId) {
@@ -461,14 +487,17 @@ class DatabaseService {
       .single();
 
     if (error || !data) return null;
-    if (data.moderation_status === 'deleted') return null;
     if (new Date(data.expires_at).getTime() <= Date.now()) {
       await this.deleteFileFromSupabase(data.id, data.storage_path).catch(() => {});
       addPurgedFileId(data.id);
       return null;
     }
 
-    return this.mapSupabaseRecord(data);
+    const mapped = this.mapSupabaseRecord(data);
+    if (!mapped || mapped.type === 'deleted' || mapped.moderationStatus === 'deleted') {
+      return null;
+    }
+    return mapped;
   }
 
   async incrementSupabaseDownload(fileId) {
@@ -623,6 +652,7 @@ class DatabaseService {
       await new Promise(r => setTimeout(r, 35));
     }
 
+    const normalizedPin = normalizePin(pin);
     const record = {
       id: fileId,
       name: file.name,
@@ -635,8 +665,8 @@ class DatabaseService {
       createdAt: new Date(now).toISOString(),
       expiresAt: expiresAt,
       downloadsCount: 0,
-      hasPin: Boolean(pin),
-      pin: pin || null
+      hasPin: Boolean(normalizedPin),
+      pin: normalizedPin
     };
 
     return new Promise((resolve, reject) => {
@@ -661,6 +691,7 @@ class DatabaseService {
     const expiresAt = this.resolveExpiryIso(durationMs, now);
     const urlBytes = Math.max(1, new Blob([url]).size);
 
+    const normalizedPin = normalizePin(pin);
     const record = {
       id: linkId,
       name: displayName,
@@ -675,8 +706,8 @@ class DatabaseService {
       createdAt: new Date(now).toISOString(),
       expiresAt: expiresAt,
       downloadsCount: 0,
-      hasPin: Boolean(pin),
-      pin: pin || null
+      hasPin: Boolean(normalizedPin),
+      pin: normalizedPin
     };
 
     return new Promise((resolve, reject) => {
@@ -886,9 +917,15 @@ class DatabaseService {
           try {
             const { data: cur } = await this.supabase.from('files').select('type').eq('id', fileId).single();
             if (cur) {
-              let newType = (cur.type || '').replace(/; mod=[^;]*/g, '').replace(/; reason=[^;]*/g, '');
+              const rawCurType = String(cur.type || '');
+              if (rawCurType.split(';')[0].trim() === 'deleted') {
+                return null;
+              }
+              let newType = rawCurType.replace(/;\s*(?:mod|reason)=[^;]*/g, '');
               if (status === 'flagged') {
                 newType += `; mod=flagged; reason=${encodeURIComponent(reason)}`;
+              } else if (status === 'pending') {
+                newType += `; mod=pending`;
               } else {
                 newType += `; mod=safe`;
               }

@@ -4,8 +4,8 @@
  * file management, and instant purge controls for prohibited material.
  */
 
-import { dbService } from './db.js?v=20261128-mod-v21';
-import { moderationService } from './moderation.js?v=20261128-mod-v21';
+import { dbService } from './db.js?v=20261128-pin-v23';
+import { moderationService } from './moderation.js?v=20261128-pin-v23';
 
 // DOM Elements
 const authOverlay = document.getElementById('auth-overlay');

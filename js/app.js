@@ -4,8 +4,8 @@
  * sorting, live 7-day countdown, and Supabase / Local storage switching.
  */
 
-import { dbService, getPurgedFileIds, addPurgedFileId } from './db.js?v=20261128-mod-v21';
-import { moderationService } from './moderation.js?v=20261128-mod-v21';
+import { dbService, getPurgedFileIds, addPurgedFileId } from './db.js?v=20261128-pin-v23';
+import { moderationService } from './moderation.js?v=20261128-pin-v23';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_DURATION_MS = 60 * 1000;
@@ -154,7 +154,11 @@ async function initApp() {
       } else if (eventType === 'UPDATE') {
         const idx = activeFiles.findIndex(f => f.id === record.id);
         if (idx !== -1) {
-          activeFiles[idx] = record;
+          if (record.type === 'deleted' || record.moderationStatus === 'deleted') {
+            activeFiles.splice(idx, 1);
+          } else {
+            activeFiles[idx] = record;
+          }
           renderFilesTable();
           updateFooterStorageTracker();
         }
@@ -905,7 +909,10 @@ async function uploadSingleFile(file, pin = null, durationMs = SEVEN_DAYS_MS) {
       : (safetyCheck.reason || 'AI safety verification pending');
     uploaded.moderationStatus = modStatus;
     uploaded.moderationReason = modReason;
-    await dbService.updateModerationStatus(uploaded.id, modStatus, modReason).catch(() => {});
+    const updatedRecord = await dbService.updateModerationStatus(uploaded.id, modStatus, modReason).catch(() => null);
+    if (updatedRecord) {
+      Object.assign(uploaded, updatedRecord);
+    }
 
     uploadWidgetTitle.textContent = 'Upload Complete';
     if (widgetFilePercent) widgetFilePercent.textContent = '100%';
@@ -1202,7 +1209,10 @@ async function uploadSingleLink(url, pin = null, durationMs = SEVEN_DAYS_MS) {
       : (safetyCheck.reason || 'AI safety verification pending');
     uploaded.moderationStatus = modStatus;
     uploaded.moderationReason = modReason;
-    await dbService.updateModerationStatus(uploaded.id, modStatus, modReason).catch(() => {});
+    const updatedRecord = await dbService.updateModerationStatus(uploaded.id, modStatus, modReason).catch(() => null);
+    if (updatedRecord) {
+      Object.assign(uploaded, updatedRecord);
+    }
 
     uploadWidgetTitle.textContent = 'Link Saved';
     if (widgetFilePercent) widgetFilePercent.textContent = '100%';
@@ -1266,7 +1276,7 @@ function renderFilesTable() {
   // Filter unexpired files matching search query, excluding any purged or deleted files
   let filtered = activeFiles.filter((f) => {
     if (purged.has(String(f.id))) return false;
-    if (f.moderationStatus === 'deleted') return false;
+    if (f.type === 'deleted' || f.moderationStatus === 'deleted') return false;
     const exp = new Date(f.expiresAt).getTime();
     if (exp <= now) return false;
 
@@ -1564,9 +1574,10 @@ function startCountdownTicker() {
 const unlockedFileIds = new Set();
 
 function handleDownloadAttempt(file, onSuccess) {
-  if (file.hasPin && !unlockedFileIds.has(file.id)) {
+  const fileKey = String(file.id);
+  if (file.hasPin && !unlockedFileIds.has(fileKey)) {
     openPinModal(file, () => {
-      unlockedFileIds.add(file.id);
+      unlockedFileIds.add(fileKey);
       if (onSuccess) {
         onSuccess();
       } else {
@@ -1688,16 +1699,17 @@ function openPinModal(file, onUnlocked) {
   pinInput.type = 'password';
   const eyeIcon = document.getElementById('pin-eye-icon');
   if (eyeIcon) {
-    eyeIcon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="3" r="3"></circle>`;
+    eyeIcon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
   }
   errorFeedback.hidden = true;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const enteredPin = pinInput.value.trim();
-    if (enteredPin === String(file.pin).trim()) {
-      pinForm.removeEventListener('submit', handleSubmit);
-      unlockedFileIds.add(file.id);
+    const expectedPin = file.pin != null ? String(file.pin).trim() : '';
+    if (expectedPin !== '' && enteredPin === expectedPin) {
+      pinForm.onsubmit = null;
+      unlockedFileIds.add(String(file.id));
       pinDialog.close();
       showToast('PIN verified successfully!', 'success');
       if (onUnlocked) onUnlocked();
@@ -1892,7 +1904,8 @@ function openShareDialog(file) {
 
 async function openFilePreview(file) {
   // If item requires PIN and has not been unlocked in this session
-  if (file.hasPin && !unlockedFileIds.has(file.id)) {
+  const fileKey = String(file.id);
+  if (file.hasPin && !unlockedFileIds.has(fileKey)) {
     openPinModal(file, () => openFilePreview(file));
     return;
   }
@@ -2670,9 +2683,10 @@ async function checkUrlQueryParams() {
       const file = await dbService.getFileById(fileId);
       if (file) {
         recordFileView(file);
-        if (file.hasPin && !unlockedFileIds.has(file.id)) {
+        const fileKey = String(file.id);
+        if (file.hasPin && !unlockedFileIds.has(fileKey)) {
           openPinModal(file, () => {
-            unlockedFileIds.add(file.id);
+            unlockedFileIds.add(fileKey);
             openShareDialog(file);
           });
         } else {
